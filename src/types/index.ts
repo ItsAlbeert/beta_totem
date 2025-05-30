@@ -1,3 +1,4 @@
+
 export interface Participant {
   id: string;
   name: string;
@@ -26,6 +27,8 @@ export interface LeaderboardEntry extends Participant {
 
 export interface ParticipantTrendDataPoint {
   date: string; // Or Date object
+  physicalTime: number;
+  mentalTime: number;
   weightedTotalTime: number;
 }
 
