@@ -26,9 +26,9 @@ export interface LeaderboardEntry extends Participant {
 }
 
 export interface ParticipantTrendDataPoint {
-  date: string; // Or Date object
-  physicalTime: number;
-  mentalTime: number;
+  time: string; // e.g., "09:00", "10:00"
+  physicalTime: number | null;
+  mentalTime: number | null;
   weightedTotalTime: number;
 }
 

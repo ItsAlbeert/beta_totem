@@ -14,7 +14,7 @@ import {
   ChartLegendContent,
   type ChartConfig,
 } from "@/components/ui/chart";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts"; // Removed Tooltip, Legend as they are part of ChartContainer
 import type { Participant, ParticipantTrend, ParticipantTrendDataPoint, LeaderboardEntry } from "@/types";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -42,7 +42,7 @@ const mockScoresForRanking = mockParticipantsList.map((p, index) => ({
   extraTime: Math.floor(Math.random() * 5),        // Random extra time 0-4
 }));
 
-function calculateWeightedTotalTime(physicalTime: number, mentalTime: number, extraTime: number = 0): number {
+function calculateOverallWeightedTotalTime(physicalTime: number, mentalTime: number, extraTime: number = 0): number {
   return physicalTime + (mentalTime * 3) - extraTime;
 }
 
@@ -50,7 +50,7 @@ const mockLeaderboardData: LeaderboardEntry[] = mockScoresForRanking
   .map((score) => {
     const participant = mockParticipantsList.find(p => p.id === score.participantId);
     if (!participant) return null;
-    const weightedTotalTime = calculateWeightedTotalTime(score.physicalTime, score.mentalTime, score.extraTime);
+    const weightedTotalTime = calculateOverallWeightedTotalTime(score.physicalTime, score.mentalTime, score.extraTime);
     return {
       ...participant,
       rank: 0, // Placeholder
@@ -66,40 +66,69 @@ const mockLeaderboardData: LeaderboardEntry[] = mockScoresForRanking
 
 const top10ParticipantIds = mockLeaderboardData.slice(0, 10).map(p => p.id);
 
+const PHYSICAL_START_HOUR = 9;
+const PHYSICAL_END_HOUR = 16;
+const MENTAL_START_HOUR = 17;
+const MENTAL_END_HOUR = 19;
+
+function calculateIntradayWeightedTotalTime(physicalTime: number | null, mentalTime: number | null, extraTime: number = 0): number {
+  const pTime = physicalTime ?? 0;
+  const mTime = mentalTime ?? 0;
+  // For intraday trends, extraTime might not be applicable per hour, so default to 0 unless specified otherwise
+  return pTime + (mTime * 3) - extraTime;
+}
+
 const generateTrendDataForParticipant = (participantId: string, name: string): ParticipantTrend => {
   const trendData: ParticipantTrendDataPoint[] = [];
-  let lastPhysical = 20 + Math.floor(Math.random() * 20);
-  let lastMental = 8 + Math.floor(Math.random() * 10);
-  for (let i = 0; i < 5; i++) { // 5 data points
-    const date = new Date(2024, 6, 1 + i * 7).toISOString().split('T')[0]; // Weekly data for July
+  
+  let lastPhysical = 20 + Math.floor(Math.random() * 20); // Base physical time
+  let lastMental = 8 + Math.floor(Math.random() * 10);   // Base mental time
+
+  // Physical challenge times
+  for (let hour = PHYSICAL_START_HOUR; hour <= PHYSICAL_END_HOUR; hour++) {
+    const time = `${hour.toString().padStart(2, '0')}:00`;
     lastPhysical = Math.max(15, lastPhysical + (Math.random() * 6 - 3)); // Fluctuate by +/-3
-    lastMental = Math.max(5, lastMental + (Math.random() * 4 - 2)); // Fluctuate by +/-2
+    const physicalTime = parseFloat(lastPhysical.toFixed(1));
     trendData.push({
-      date,
-      physicalTime: parseFloat(lastPhysical.toFixed(1)),
-      mentalTime: parseFloat(lastMental.toFixed(1)),
-      weightedTotalTime: parseFloat(calculateWeightedTotalTime(lastPhysical, lastMental, 0).toFixed(1)), // Assuming 0 extra time for trends simplicity
+      time,
+      physicalTime,
+      mentalTime: null,
+      weightedTotalTime: parseFloat(calculateIntradayWeightedTotalTime(physicalTime, null).toFixed(1)),
     });
   }
-  return { participantId, participantName: name, trendData };
+
+  // Mental challenge times
+  for (let hour = MENTAL_START_HOUR; hour <= MENTAL_END_HOUR; hour++) {
+    const time = `${hour.toString().padStart(2, '0')}:00`;
+    lastMental = Math.max(5, lastMental + (Math.random() * 4 - 2)); // Fluctuate by +/-2
+    const mentalTime = parseFloat(lastMental.toFixed(1));
+    trendData.push({
+      time,
+      physicalTime: null,
+      mentalTime,
+      weightedTotalTime: parseFloat(calculateIntradayWeightedTotalTime(null, mentalTime).toFixed(1)),
+    });
+  }
+  
+  return { participantId, participantName: name, trendData: trendData.sort((a,b) => a.time.localeCompare(b.time)) };
 };
 
 const allParticipantTrendsData: ParticipantTrend[] = mockParticipantsList.map(p => generateTrendDataForParticipant(p.id, p.name));
 
 const chartColors = [
-  "hsl(var(--chart-1))",
-  "hsl(var(--chart-2))",
-  "hsl(var(--chart-3))",
-  "hsl(var(--chart-4))",
-  "hsl(var(--chart-5))",
-  "hsl(var(--primary))",
-  "hsl(var(--accent))",
-  "hsl(var(--secondary-foreground))", // Re-using some theme colors
-  "hsl(var(--muted-foreground))",
-  "hsl(var(--foreground))",
+  "hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))",
+  "hsl(var(--primary))", "hsl(var(--accent))", "hsl(var(--secondary-foreground))", "hsl(var(--muted-foreground))", "hsl(var(--foreground))",
 ];
 
-const commonDates = allParticipantTrendsData.length > 0 ? allParticipantTrendsData[0].trendData.map(d => d.date).sort() : [];
+const commonTimes: string[] = [];
+for (let hour = PHYSICAL_START_HOUR; hour <= PHYSICAL_END_HOUR; hour++) {
+  commonTimes.push(`${hour.toString().padStart(2, '0')}:00`);
+}
+for (let hour = MENTAL_START_HOUR; hour <= MENTAL_END_HOUR; hour++) {
+  commonTimes.push(`${hour.toString().padStart(2, '0')}:00`);
+}
+commonTimes.sort((a,b) => a.localeCompare(b.time));
+
 
 function formatDataForChart(
   participantIds: string[],
@@ -109,10 +138,10 @@ function formatDataForChart(
   const relevantTrends = allTrends.filter(t => participantIds.includes(t.participantId));
   if (relevantTrends.length === 0) return { chartData: [], chartConfig: {} };
 
-  const chartData = commonDates.map(date => {
-    const dataPoint: any = { date };
+  const chartData = commonTimes.map(time => {
+    const dataPoint: any = { time }; // Use 'time' as the key for X-axis
     relevantTrends.forEach(trend => {
-      const trendPoint = trend.trendData.find(dp => dp.date === date);
+      const trendPoint = trend.trendData.find(dp => dp.time === time);
       dataPoint[trend.participantName] = trendPoint ? trendPoint[dataKey] : null;
     });
     return dataPoint;
@@ -168,9 +197,13 @@ export default function TrendsPage() {
     if (loading && data.length === 0) {
       return <Skeleton className="h-[400px] w-full" />;
     }
-    if (!loading && data.length === 0) {
-      return <p className="text-center text-muted-foreground py-8">No data available for this chart.</p>;
+    if (!loading && data.length === 0 && title !== "Custom Participant Comparison") { // Don't show "no data" for custom if nothing selected
+       return <p className="text-center text-muted-foreground py-8">No data available for this chart.</p>;
     }
+    if (!loading && data.length === 0 && title === "Custom Participant Comparison" && selectedIdsForComparison.length > 0){
+       return <p className="text-center text-muted-foreground py-8">No trend data for selected participants.</p>;
+    }
+
 
     return (
       <Card className="shadow-lg">
@@ -184,8 +217,8 @@ export default function TrendsPage() {
               <LineChart data={data} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis
-                  dataKey="date"
-                  tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  dataKey="time" // Changed from date to time
+                  tickFormatter={(value) => value} // Display time as is (e.g., "09:00")
                   stroke="hsl(var(--muted-foreground))"
                 />
                 <YAxis
@@ -206,6 +239,7 @@ export default function TrendsPage() {
                     strokeWidth={2}
                     dot={{ r: 3 }}
                     activeDot={{ r: 5 }}
+                    connectNulls={false} // Explicitly set, though default is false
                   />
                 ))}
               </LineChart>
@@ -220,20 +254,20 @@ export default function TrendsPage() {
     <>
       <PageHeader
         title="Performance Trends"
-        description="Analyze participant performance over time with comparative charts."
+        description="Analyze participant performance by hour for a single competition day."
       />
       <div className="space-y-8">
         {renderChart(
-          "Top 10 - Physical Challenge Trends",
-          "Comparison of physical challenge times (lower is better) for the top 10 ranked participants.",
+          "Top 10 - Physical Challenge Trends (9:00 - 16:00)",
+          "Comparison of physical challenge times (lower is better) for the top 10 ranked participants, by hour.",
           top10Physical.chartData,
           top10Physical.chartConfig,
           "Physical Time (min)"
         )}
 
         {renderChart(
-          "Top 10 - Mental Challenge Trends",
-          "Comparison of mental challenge times (lower is better) for the top 10 ranked participants.",
+          "Top 10 - Mental Challenge Trends (17:00 - 19:00)",
+          "Comparison of mental challenge times (lower is better) for the top 10 ranked participants, by hour.",
           top10Mental.chartData,
           top10Mental.chartConfig,
           "Mental Time (min)"
@@ -242,7 +276,7 @@ export default function TrendsPage() {
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle>Custom Participant Comparison</CardTitle>
-            <CardDescription>Select participants below to compare their weighted total time trends (lower is better).</CardDescription>
+            <CardDescription>Select participants below to compare their weighted total time trends by hour (lower is better).</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="mb-6">
@@ -273,7 +307,7 @@ export default function TrendsPage() {
             {selectedIdsForComparison.length > 0 ? (
                  renderChart(
                     `Comparison: ${selectedIdsForComparison.map(id => mockParticipantsList.find(p=>p.id===id)?.name).filter(Boolean).join(', ')}`,
-                    "Weighted total time trends for selected participants.",
+                    "Weighted total time trends for selected participants by hour.",
                     comparisonChart.chartData,
                     comparisonChart.chartConfig,
                     "Weighted Time (min)"
@@ -290,4 +324,3 @@ export default function TrendsPage() {
     </>
   );
 }
-
