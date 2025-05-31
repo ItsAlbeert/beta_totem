@@ -25,11 +25,13 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 import { useToast } from "@/hooks/use-toast";
-import type { Participant, Score } from "@/types";
+import type { Participant, Score, Game, GameCategory } from "@/types";
 import { useState, useEffect } from "react";
+import { Separator } from "@/components/ui/separator";
 
 const PARTICIPANTS_STORAGE_KEY = "chronoScoreParticipants";
 const SCORES_STORAGE_KEY = "chronoScoreScores";
+const GAMES_STORAGE_KEY = "chronoScoreGames";
 
 const timeInputSchema = z.object({
   participantId: z.string().min(1, "Participant selection is required."),
@@ -43,6 +45,7 @@ const timeInputSchema = z.object({
     .number({ invalid_type_error: "Extra time must be a number." })
     .min(0, "Extra time cannot be negative.")
     .optional(),
+  gameTimes: z.record(z.string(), z.coerce.number().min(0, "Game time cannot be negative.").optional()).optional(),
 });
 
 type TimeInputFormValues = z.infer<typeof timeInputSchema>;
@@ -50,14 +53,15 @@ type TimeInputFormValues = z.infer<typeof timeInputSchema>;
 const getStoredParticipants = (): Participant[] => {
   if (typeof window !== 'undefined') {
     const stored = localStorage.getItem(PARTICIPANTS_STORAGE_KEY);
-    if (stored) {
-      try {
-        return JSON.parse(stored) as Participant[];
-      } catch (e) {
-        console.error("Failed to parse participants from localStorage on TimesPage", e);
-        return [];
-      }
-    }
+    return stored ? JSON.parse(stored) : [];
+  }
+  return [];
+};
+
+const getStoredGames = (): Game[] => {
+  if (typeof window !== 'undefined') {
+    const stored = localStorage.getItem(GAMES_STORAGE_KEY);
+    return stored ? JSON.parse(stored) : [];
   }
   return [];
 };
@@ -65,15 +69,7 @@ const getStoredParticipants = (): Participant[] => {
 const getStoredScores = (): Score[] => {
   if (typeof window !== 'undefined') {
     const stored = localStorage.getItem(SCORES_STORAGE_KEY);
-    if (stored) {
-      try {
-        return JSON.parse(stored) as Score[];
-      } catch (e) {
-        console.error("Failed to parse scores from localStorage", e);
-        localStorage.removeItem(SCORES_STORAGE_KEY); // Clear corrupted data
-        return [];
-      }
-    }
+    return stored ? JSON.parse(stored) : [];
   }
   return [];
 };
@@ -87,10 +83,7 @@ const storeScores = (scores: Score[]) => {
 export default function TimesPage() {
   const { toast } = useToast();
   const [participants, setParticipants] = useState<Participant[]>([]);
-
-  useEffect(() => {
-    setParticipants(getStoredParticipants());
-  }, []);
+  const [games, setGames] = useState<Game[]>([]);
 
   const form = useForm<TimeInputFormValues>({
     resolver: zodResolver(timeInputSchema),
@@ -99,19 +92,29 @@ export default function TimesPage() {
       physicalTime: 0,
       mentalTime: 0,
       extraTime: 0,
+      gameTimes: {},
     },
   });
 
   useEffect(() => {
+    setParticipants(getStoredParticipants());
+    setGames(getStoredGames());
+
     const handleStorageChange = (event: StorageEvent) => {
       if (event.key === PARTICIPANTS_STORAGE_KEY) {
-        setParticipants(getStoredParticipants());
-        // If the currently selected participant was deleted, reset the field
+        const updatedParticipants = getStoredParticipants();
+        setParticipants(updatedParticipants);
         const currentSelectedId = form.getValues("participantId");
-        if (currentSelectedId && !getStoredParticipants().find(p => p.id === currentSelectedId)) {
-            form.resetField("participantId");
-            form.setValue("participantId", ""); // Explicitly set to empty
+        if (currentSelectedId && !updatedParticipants.find(p => p.id === currentSelectedId)) {
+          form.resetField("participantId");
+          form.setValue("participantId", "");
         }
+      }
+      if (event.key === GAMES_STORAGE_KEY) {
+        setGames(getStoredGames());
+        // Potentially reset gameTimes if games structure changes significantly, or re-validate
+        // For now, just reload. If a game was deleted, its field won't render.
+        // If a game was added, its field will appear.
       }
     };
 
@@ -119,14 +122,14 @@ export default function TimesPage() {
       window.addEventListener('storage', handleStorageChange);
       const refreshOnFocus = () => {
         setParticipants(getStoredParticipants());
-         const currentSelectedId = form.getValues("participantId");
+        setGames(getStoredGames());
+        const currentSelectedId = form.getValues("participantId");
         if (currentSelectedId && !getStoredParticipants().find(p => p.id === currentSelectedId)) {
             form.resetField("participantId");
-            form.setValue("participantId", ""); 
+            form.setValue("participantId", "");
         }
       }
       window.addEventListener('focus', refreshOnFocus);
-
       return () => {
         window.removeEventListener('storage', handleStorageChange);
         window.removeEventListener('focus', refreshOnFocus);
@@ -148,6 +151,10 @@ export default function TimesPage() {
     const physicalTime = values.physicalTime;
     const mentalTime = values.mentalTime;
     const extraTime = values.extraTime || 0;
+    const gameSpecificTimes = values.gameTimes || {};
+
+    // Optional: Validate sum of game times against total category time here if needed
+
     const weightedTotalTime = physicalTime + (mentalTime * 3) - extraTime;
 
     const newScore: Score = {
@@ -156,6 +163,7 @@ export default function TimesPage() {
       physicalTime: physicalTime,
       mentalTime: mentalTime,
       extraTime: extraTime,
+      gameTimes: gameSpecificTimes,
       weightedTotalTime: weightedTotalTime,
       recordedAt: new Date().toISOString(),
     };
@@ -169,15 +177,54 @@ export default function TimesPage() {
       description: `Times for ${selectedParticipant.name} have been saved. Weighted total: ${weightedTotalTime} min.`,
       variant: "default",
     });
-    form.reset();
-    form.setValue("participantId", ""); // Ensure dropdown placeholder shows
+    form.reset({ // Reset with specific empty/default values
+      participantId: "",
+      physicalTime: 0,
+      mentalTime: 0,
+      extraTime: 0,
+      gameTimes: {},
+    });
   }
+
+  const renderGameTimeFields = (category: GameCategory) => {
+    const categoryGames = games.filter(game => game.category === category);
+    if (categoryGames.length === 0) return null;
+
+    return (
+      <div className="mt-4 space-y-4">
+        <h4 className="text-md font-semibold text-muted-foreground">{category} Games Times</h4>
+        {categoryGames.map(game => (
+          <FormField
+            key={game.id}
+            control={form.control}
+            name={`gameTimes.${game.id}`}
+            render={({ field }) => (
+              <FormItem className="ml-4">
+                <FormLabel>{game.name} (minutes)</FormLabel>
+                <FormControl>
+                  <Input 
+                    type="number" 
+                    placeholder="e.g., 10" 
+                    {...field} 
+                    value={field.value ?? ''} // Handle undefined by showing empty string
+                    onChange={e => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))} 
+                    step="any" 
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        ))}
+      </div>
+    );
+  };
 
   return (
     <>
       <PageHeader
         title="Record Times"
-        description="Enter the physical, mental, and any extra (bonus) times for a participant."
+        description="Enter total category times and specific game times for a participant."
       />
       <Card className="max-w-2xl mx-auto shadow-lg">
         <CardHeader>
@@ -193,9 +240,7 @@ export default function TimesPage() {
                   <FormItem>
                     <FormLabel>Participant</FormLabel>
                     <Select 
-                      onValueChange={(value) => {
-                        field.onChange(value);
-                      }} 
+                      onValueChange={field.onChange} 
                       value={field.value}
                     >
                       <FormControl>
@@ -206,7 +251,7 @@ export default function TimesPage() {
                       <SelectContent>
                         {participants.length === 0 && (
                            <div className="p-4 text-sm text-muted-foreground text-center">
-                             No participants found. Please add participants on the Participants page.
+                             No participants found. Add participants on the Participants page.
                            </div>
                         )}
                         {participants.map((participant) => (
@@ -221,56 +266,71 @@ export default function TimesPage() {
                 )}
               />
 
+              <Separator />
+
+              {/* Physical Times */}
               <FormField
                 control={form.control}
                 name="physicalTime"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Physical Challenge Time (minutes)</FormLabel>
+                    <FormLabel>Total Physical Challenge Time (minutes)</FormLabel>
                     <FormControl>
                       <Input type="number" placeholder="e.g., 30" {...field} step="any" />
                     </FormControl>
                     <FormDescription>
-                      Time taken for the physical challenge.
+                      Total time taken for all physical challenges.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+              {renderGameTimeFields("Physical")}
 
+              <Separator />
+
+              {/* Mental Times */}
               <FormField
                 control={form.control}
                 name="mentalTime"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Mental Challenge Time (minutes)</FormLabel>
+                    <FormLabel>Total Mental Challenge Time (minutes)</FormLabel>
                     <FormControl>
                       <Input type="number" placeholder="e.g., 15" {...field} step="any"/>
                     </FormControl>
                     <FormDescription>
-                      Time taken for the mental challenge.
+                      Total time taken for all mental challenges.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+              {renderGameTimeFields("Mental")}
+              
+              <Separator />
 
+              {/* Extra Times */}
               <FormField
                 control={form.control}
                 name="extraTime"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Extra Bonus Time (minutes, optional)</FormLabel>
+                    <FormLabel>Total Extra Bonus Time (minutes, optional)</FormLabel>
                     <FormControl>
                       <Input type="number" placeholder="e.g., 5" {...field} step="any"/>
                     </FormControl>
                     <FormDescription>
-                      Bonus time to be subtracted (e.g., for completing tasks quickly).
+                      Total bonus time to be subtracted (e.g., for all extra tasks).
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+              {renderGameTimeFields("Extra")}
+              
+              <Separator />
+              
               <div className="flex justify-end">
                 <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled={form.formState.isSubmitting || participants.length === 0}>
                   {form.formState.isSubmitting ? "Saving..." : "Save Times"}

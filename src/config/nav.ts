@@ -30,6 +30,12 @@ export const primaryNav: NavItemGroup[] = [
         icon: Icons.Users,
         description: "View participant information.",
       },
+      {
+        title: "Games",
+        href: "/games",
+        icon: Icons.Gamepad2,
+        description: "Manage competition games and their categories.",
+      },
     ],
   },
   {

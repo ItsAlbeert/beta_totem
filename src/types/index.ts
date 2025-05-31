@@ -1,4 +1,13 @@
 
+export type GameCategory = 'Physical' | 'Mental' | 'Extra';
+
+export interface Game {
+  id: string;
+  name: string;
+  description: string;
+  category: GameCategory;
+}
+
 export interface Participant {
   id: string;
   name: string;
@@ -9,9 +18,10 @@ export interface Participant {
 export interface Score {
   id: string; // Unique ID for the score entry
   participantId: string;
-  physicalTime: number;
-  mentalTime: number;
-  extraTime?: number;
+  physicalTime: number; // Total physical time
+  mentalTime: number;   // Total mental time
+  extraTime?: number;    // Total extra time
+  gameTimes?: { [gameId: string]: number }; // Time for each specific game, gameId is key
   weightedTotalTime: number;
   recordedAt: string; // ISO string date
 }
@@ -41,18 +51,4 @@ export interface ChartConfig {
     | { color?: string; theme?: never }
     | { color?: never; theme: Record<string, string> } // Adjusted theme type
   );
-}
-
-// Kept existing types from trends page for potential future use or if structure is similar
-export interface ParticipantTrendDataPoint {
-  time: string; // e.g., "09:00", "10:00" or a full timestamp
-  physicalTime: number | null;
-  mentalTime: number | null;
-  weightedTotalTime: number;
-}
-
-export interface ParticipantTrend {
-  participantId: string;
-  participantName: string;
-  trendData: ParticipantTrendDataPoint[];
 }
