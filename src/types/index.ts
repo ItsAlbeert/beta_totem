@@ -32,6 +32,7 @@ export interface LeaderboardEntry extends Participant {
   physicalTime: number;
   mentalTime: number;
   extraTime?: number;
+  gameTimes?: { [gameId: string]: number }; // Explicitly add gameTimes here
   weightedTotalTime: number;
   scoreRecordedAt: string; // To know when this score was from
 }
@@ -52,3 +53,4 @@ export interface ChartConfig {
     | { color?: never; theme: Record<string, string> } // Adjusted theme type
   );
 }
+

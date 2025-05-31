@@ -6,13 +6,15 @@ import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import type { LeaderboardEntry, Participant, Score } from "@/types";
-import { ArrowDownUp } from "lucide-react";
+import type { LeaderboardEntry, Participant, Score, Game, GameCategory } from "@/types";
+import { ArrowDownUp, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 
 const PARTICIPANTS_STORAGE_KEY = "chronoScoreParticipants";
 const SCORES_STORAGE_KEY = "chronoScoreScores";
+const GAMES_STORAGE_KEY = "chronoScoreGames";
 
 type SortableColumn = keyof Pick<LeaderboardEntry, 'rank' | 'name' | 'year' | 'physicalTime' | 'mentalTime' | 'extraTime' | 'weightedTotalTime'>;
 type SortDirection = 'asc' | 'desc';
@@ -20,107 +22,140 @@ type SortDirection = 'asc' | 'desc';
 const getStoredParticipants = (): Participant[] => {
   if (typeof window === 'undefined') return [];
   const stored = localStorage.getItem(PARTICIPANTS_STORAGE_KEY);
-  return stored ? JSON.parse(stored) : [];
+  try {
+    return stored ? JSON.parse(stored) : [];
+  } catch (e) {
+    return [];
+  }
 };
 
 const getStoredScores = (): Score[] => {
   if (typeof window === 'undefined') return [];
   const stored = localStorage.getItem(SCORES_STORAGE_KEY);
-  return stored ? JSON.parse(stored) : [];
+  try {
+    return stored ? JSON.parse(stored) : [];
+  } catch (e) {
+    return [];
+  }
 };
 
-export default function LeaderboardPage() {
-  const [leaderboardData, setLeaderboardData] = useState<LeaderboardEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [sortColumn, setSortColumn] = useState<SortableColumn>('rank');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+const getStoredGames = (): Game[] => {
+  if (typeof window === 'undefined') return [];
+  const stored = localStorage.getItem(GAMES_STORAGE_KEY);
+  try {
+    return stored ? JSON.parse(stored) : [];
+  } catch (e) {
+    return [];
+  }
+};
 
-  useEffect(() => {
-    const participants = getStoredParticipants();
-    const scores = getStoredScores();
-
-    const processedData: LeaderboardEntry[] = participants.map(participant => {
-      const participantScores = scores.filter(s => s.participantId === participant.id);
+const processLeaderboardData = (
+  participants: Participant[],
+  scores: Score[]
+): LeaderboardEntry[] => {
+  const processedData: LeaderboardEntry[] = participants
+    .map((participant) => {
+      const participantScores = scores.filter(
+        (s) => s.participantId === participant.id
+      );
       if (participantScores.length === 0) return null;
 
-      // Find the latest score for this participant
-      const latestScore = participantScores.reduce((latest, current) => 
-        new Date(current.recordedAt) > new Date(latest.recordedAt) ? current : latest
+      const latestScore = participantScores.reduce((latest, current) =>
+        new Date(current.recordedAt) > new Date(latest.recordedAt)
+          ? current
+          : latest
       );
-      
+
       return {
         ...participant,
-        rank: 0, // Placeholder, will be set after initial sort
+        rank: 0,
         physicalTime: latestScore.physicalTime,
         mentalTime: latestScore.mentalTime,
         extraTime: latestScore.extraTime || 0,
         weightedTotalTime: latestScore.weightedTotalTime,
         scoreRecordedAt: latestScore.recordedAt,
+        gameTimes: latestScore.gameTimes,
       };
-    }).filter(Boolean) as LeaderboardEntry[]; // Filter out nulls (participants with no scores)
+    })
+    .filter(Boolean) as LeaderboardEntry[];
 
-    // Initial sort by weightedTotalTime (lower is better) to set ranks
-    processedData.sort((a, b) => a.weightedTotalTime - b.weightedTotalTime);
-    const rankedData = processedData.map((entry, index) => ({ ...entry, rank: index + 1 }));
-    
+  processedData.sort((a, b) => a.weightedTotalTime - b.weightedTotalTime);
+  return processedData.map((entry, index) => ({ ...entry, rank: index + 1 }));
+};
+
+export default function LeaderboardPage() {
+  const [leaderboardData, setLeaderboardData] = useState<LeaderboardEntry[]>([]);
+  const [allGames, setAllGames] = useState<Game[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [sortColumn, setSortColumn] = useState<SortableColumn>('rank');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const [expandedParticipantId, setExpandedParticipantId] = useState<string | null>(null);
+
+  const fetchDataAndProcess = () => {
+    setLoading(true);
+    const participants = getStoredParticipants();
+    const scores = getStoredScores();
+    const games = getStoredGames();
+    setAllGames(games);
+    const rankedData = processLeaderboardData(participants, scores);
     setLeaderboardData(rankedData);
+    // Preserve current sort if data is just being refreshed
+    if (leaderboardData.length > 0) {
+        handleSort(sortColumn, true, rankedData); // Pass new data to sort
+    }
     setLoading(false);
+  };
 
-     // Listener for storage changes to re-fetch and re-process
-     const handleStorageChange = (event: StorageEvent) => {
-        if (event.key === PARTICIPANTS_STORAGE_KEY || event.key === SCORES_STORAGE_KEY) {
-            setLoading(true); // Indicate data is being refreshed
-            const updatedParticipants = getStoredParticipants();
-            const updatedScores = getStoredScores();
-            const newProcessedData = updatedParticipants.map(p => {
-                const pScores = updatedScores.filter(s => s.participantId === p.id);
-                if (pScores.length === 0) return null;
-                const latestPScore = pScores.reduce((l, c) => new Date(c.recordedAt) > new Date(l.recordedAt) ? c : l);
-                return {
-                    ...p, rank: 0, physicalTime: latestPScore.physicalTime, mentalTime: latestPScore.mentalTime,
-                    extraTime: latestPScore.extraTime || 0, weightedTotalTime: latestPScore.weightedTotalTime,
-                    scoreRecordedAt: latestPScore.recordedAt,
-                };
-            }).filter(Boolean) as LeaderboardEntry[];
-            newProcessedData.sort((a, b) => a.weightedTotalTime - b.weightedTotalTime);
-            const newRankedData = newProcessedData.map((entry, index) => ({ ...entry, rank: index + 1 }));
-            setLeaderboardData(newRankedData);
-            // Re-apply current sort after data update
-            handleSort(sortColumn, true); // Pass true to avoid toggling direction
-            setLoading(false);
-        }
+  useEffect(() => {
+    fetchDataAndProcess();
+
+    const handleStorageChange = (event: StorageEvent) => {
+      if (
+        event.key === PARTICIPANTS_STORAGE_KEY ||
+        event.key === SCORES_STORAGE_KEY ||
+        event.key === GAMES_STORAGE_KEY
+      ) {
+        fetchDataAndProcess();
+        setExpandedParticipantId(null); // Collapse on data change
+      }
     };
-    
+
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
+  }, []); // Initial fetch
 
-  }, [sortColumn, sortDirection]); // sortColumn/Direction removed from deps as initial load sort is fixed
+  const handleSort = (column: SortableColumn, maintainDirection = false, dataToSort?: LeaderboardEntry[]) => {
+    const currentData = dataToSort || leaderboardData;
+    if(currentData.length === 0) return;
 
-  const handleSort = (column: SortableColumn, maintainDirection = false) => {
     let direction = sortDirection;
     if (sortColumn === column && !maintainDirection) {
       direction = sortDirection === 'asc' ? 'desc' : 'asc';
     } else if (!maintainDirection) {
-      direction = 'asc'; // Default to ascending for new column
+      direction = 'asc';
     }
     
     setSortColumn(column);
     setSortDirection(direction);
+    setExpandedParticipantId(null); // Collapse on sort
 
-    const sortedData = [...leaderboardData].sort((a, b) => {
+    const sortedData = [...currentData].sort((a, b) => {
       let valA = a[column];
       let valB = b[column];
 
       if (typeof valA === 'string' && typeof valB === 'string') {
         return direction === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
       }
-      // Ensure numbers, handling potential undefined for extraTime
-      valA = (valA === undefined ? -Infinity : valA) as number;
-      valB = (valB === undefined ? -Infinity : valB) as number;
+      valA = (valA === undefined ? (direction === 'asc' ? Infinity : -Infinity) : valA) as number;
+      valB = (valB === undefined ? (direction === 'asc' ? Infinity : -Infinity) : valB) as number;
       
-      return direction === 'asc' ? (valA as number) - (valB as number) : (valB as number) - (valA as number);
+      return direction === 'asc' ? valA - valB : valB - valA;
     });
     setLeaderboardData(sortedData);
+  };
+
+  const toggleExpandParticipant = (participantId: string) => {
+    setExpandedParticipantId(prevId => prevId === participantId ? null : participantId);
   };
 
   const SortableButton = ({ column, children }: { column: SortableColumn, children: React.ReactNode }) => (
@@ -134,28 +169,29 @@ export default function LeaderboardPage() {
     <>
       <PageHeader
         title="Leaderboard"
-        description="Overall participant rankings based on weighted total time."
+        description="Overall participant rankings based on weighted total time. Click rows for game details."
       />
       <Card className="shadow-lg">
         <CardHeader>
           <CardTitle>Current Standings</CardTitle>
           <CardDescription>
             Participants are ranked by their weighted total time (lower is better).
-            Click column headers to sort.
+            Click column headers to sort or participant rows to see game time breakdowns.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {loading ? (
+          {loading && leaderboardData.length === 0 ? ( // Show skeleton only on initial load and if no data yet
             <div className="space-y-2">
               <Skeleton className="h-12 w-full" />
-              {[...Array(3)].map((_, i) => (
-                <Skeleton key={i} className="h-10 w-full" />
+              {[...Array(5)].map((_, i) => (
+                <Skeleton key={i} className="h-16 w-full" /> // Taller for potential expanded view
               ))}
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-[60px]"></TableHead> {/* For expand icon */}
                   <TableHead className="w-[80px]">
                     <SortableButton column="rank">Rank</SortableButton>
                   </TableHead>
@@ -182,21 +218,65 @@ export default function LeaderboardPage() {
               </TableHeader>
               <TableBody>
                 {leaderboardData.map((entry) => (
-                  <TableRow key={entry.id}>
-                    <TableCell className="font-bold">{entry.rank}</TableCell>
-                    <TableCell>
-                      <Avatar>
-                        <AvatarImage src={entry.photoUrl || undefined} alt={entry.name} data-ai-hint="person face" />
-                        <AvatarFallback>{entry.name.substring(0, 2).toUpperCase()}</AvatarFallback>
-                      </Avatar>
-                    </TableCell>
-                    <TableCell className="font-medium">{entry.name}</TableCell>
-                    <TableCell>{entry.year}</TableCell>
-                    <TableCell className="text-right">{entry.physicalTime} min</TableCell>
-                    <TableCell className="text-right">{entry.mentalTime} min</TableCell>
-                    <TableCell className="text-right">{entry.extraTime || 0} min</TableCell>
-                    <TableCell className="text-right font-semibold">{entry.weightedTotalTime} min</TableCell>
-                  </TableRow>
+                  <React.Fragment key={entry.id}>
+                    <TableRow 
+                        onClick={() => toggleExpandParticipant(entry.id)} 
+                        className={cn("cursor-pointer", expandedParticipantId === entry.id && "bg-muted/30")}
+                    >
+                      <TableCell className="text-center">
+                        {expandedParticipantId === entry.id ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      </TableCell>
+                      <TableCell className="font-bold">{entry.rank}</TableCell>
+                      <TableCell>
+                        <Avatar>
+                          <AvatarImage src={entry.photoUrl || undefined} alt={entry.name} data-ai-hint="person face" />
+                          <AvatarFallback>{entry.name.substring(0, 2).toUpperCase()}</AvatarFallback>
+                        </Avatar>
+                      </TableCell>
+                      <TableCell className="font-medium">{entry.name}</TableCell>
+                      <TableCell>{entry.year}</TableCell>
+                      <TableCell className="text-right">{entry.physicalTime} min</TableCell>
+                      <TableCell className="text-right">{entry.mentalTime} min</TableCell>
+                      <TableCell className="text-right">{entry.extraTime || 0} min</TableCell>
+                      <TableCell className="text-right font-semibold">{entry.weightedTotalTime} min</TableCell>
+                    </TableRow>
+                    {expandedParticipantId === entry.id && (
+                      <TableRow className="bg-muted/10 hover:bg-muted/20">
+                        <TableCell colSpan={9} className="p-0"> {/* Increased colSpan */}
+                          <div className="p-4 pl-[70px]"> {/* Indent past expand icon and rank */}
+                            <h4 className="text-md font-semibold mb-2">Game Breakdown (Latest Score on {new Date(entry.scoreRecordedAt).toLocaleDateString()}):</h4>
+                            {(['Physical', 'Mental', 'Extra'] as GameCategory[]).map(category => {
+                              const categoryGames = Object.entries(entry.gameTimes || {})
+                                .map(([gameId, time]) => {
+                                  const gameDetails = allGames.find(g => g.id === gameId);
+                                  if (gameDetails && gameDetails.category === category && typeof time === 'number') {
+                                    return { name: gameDetails.name, time };
+                                  }
+                                  return null;
+                                })
+                                .filter(Boolean) as { name: string; time: number }[];
+
+                              if (categoryGames.length === 0) return null;
+
+                              return (
+                                <div key={category} className="mb-3">
+                                  <h5 className="text-sm font-medium text-primary mb-1">{category} Games:</h5>
+                                  <ul className="list-disc pl-6 space-y-0.5 text-sm text-foreground/80">
+                                    {categoryGames.map(game => (
+                                      <li key={game.name}>{game.name}: {game.time} min</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              );
+                            })}
+                            {(!entry.gameTimes || Object.keys(entry.gameTimes).length === 0) && (
+                                <p className="text-sm text-muted-foreground">No specific game times recorded for this score entry.</p>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </React.Fragment>
                 ))}
               </TableBody>
             </Table>
