@@ -14,8 +14,10 @@ import type { Participant } from "@/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 
-// Mock data - replace with actual data fetching
-const mockParticipants: Participant[] = [
+const PARTICIPANTS_STORAGE_KEY = "chronoScoreParticipants";
+
+// Initial mock data if localStorage is empty
+const initialMockParticipants: Participant[] = [
   { id: "1", name: "Alice Wonderland", year: 1, photoUrl: "https://placehold.co/64x64.png" },
   { id: "2", name: "Bob The Builder", year: 2, photoUrl: "https://placehold.co/64x64.png" },
   { id: "3", name: "Charlie Chaplin", year: 3, photoUrl: "https://placehold.co/64x64.png" },
@@ -23,26 +25,47 @@ const mockParticipants: Participant[] = [
   { id: "5", name: "Edward Scissorhands", year: 2 }, // No photo example
 ];
 
+const getStoredParticipants = (): Participant[] | null => {
+  if (typeof window !== 'undefined') {
+    const stored = localStorage.getItem(PARTICIPANTS_STORAGE_KEY);
+    if (stored) {
+      try {
+        return JSON.parse(stored) as Participant[];
+      } catch (e) {
+        console.error("Failed to parse participants from localStorage", e);
+        localStorage.removeItem(PARTICIPANTS_STORAGE_KEY); // Clear corrupted data
+        return null;
+      }
+    }
+  }
+  return null;
+};
+
+const storeParticipants = (participants: Participant[]) => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(PARTICIPANTS_STORAGE_KEY, JSON.stringify(participants));
+  }
+};
+
 export default function ParticipantsPage() {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [loading, setLoading] = useState(true);
   const [newName, setNewName] = useState("");
-  const [newYear, setNewYear] = useState<1 | 2 | 3 | "">(1); // Ensure year is one of the allowed types or empty for input
+  const [newYear, setNewYear] = useState<1 | 2 | 3 | "">(1);
   const [newPhoto, setNewPhoto] = useState<File | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
-    // Simulate fetching participants only if the list is empty
-    if (participants.length === 0) {
-      const timer = setTimeout(() => {
-        setParticipants(mockParticipants);
-        setLoading(false);
-      }, 1000);
-      return () => clearTimeout(timer);
+    const storedParticipants = getStoredParticipants();
+    if (storedParticipants) {
+      setParticipants(storedParticipants);
     } else {
-      setLoading(false); // Already have data, no need to load mock
+      // If no participants in localStorage, initialize with mocks and store them
+      setParticipants(initialMockParticipants);
+      storeParticipants(initialMockParticipants);
     }
-  }, [participants.length]); // Rerun if participants.length changes (e.g. all deleted)
+    setLoading(false);
+  }, []);
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -66,43 +89,65 @@ export default function ParticipantsPage() {
         return;
     }
 
-
-    const newParticipant: Participant = {
-      id: Date.now().toString(), // Simple unique ID for client-side
+    const newParticipantData: Omit<Participant, 'id' | 'photoUrl'> & { photoUrl?: string } = {
       name: newName,
       year: numericYear as 1 | 2 | 3,
     };
+    
+    const newId = Date.now().toString();
+
+    const processParticipantAddition = (photoDataUrl?: string) => {
+      const finalNewParticipant: Participant = {
+        id: newId,
+        ...newParticipantData,
+        ...(photoDataUrl && { photoUrl: photoDataUrl }),
+      };
+
+      setParticipants(prevParticipants => {
+        const updatedParticipants = [...prevParticipants, finalNewParticipant];
+        storeParticipants(updatedParticipants);
+        return updatedParticipants;
+      });
+
+      toast({
+        title: "Participant Added",
+        description: `${finalNewParticipant.name} has been added.`,
+      });
+
+      setNewName("");
+      setNewYear(1);
+      setNewPhoto(null);
+      const form = e.target as HTMLFormElement;
+      form.reset(); // Reset file input as well
+    };
+
 
     if (newPhoto) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        newParticipant.photoUrl = reader.result as string;
-        setParticipants(prevParticipants => [...prevParticipants, newParticipant]);
+        processParticipantAddition(reader.result as string);
+      };
+      reader.onerror = () => {
         toast({
-          title: "Participant Added",
-          description: `${newParticipant.name} has been added.`,
+          title: "Error",
+          description: "Could not read the photo file.",
+          variant: "destructive",
         });
+         processParticipantAddition(); // Add participant without photo on error
       };
       reader.readAsDataURL(newPhoto);
     } else {
-      setParticipants(prevParticipants => [...prevParticipants, newParticipant]);
-      toast({
-        title: "Participant Added",
-        description: `${newParticipant.name} has been added.`,
-      });
+      processParticipantAddition();
     }
-
-    // Reset form fields
-    setNewName("");
-    setNewYear(1);
-    setNewPhoto(null);
-    const form = e.target as HTMLFormElement;
-    form.reset();
   };
 
   const handleDelete = (participantId: string) => {
     const participantToDelete = participants.find(p => p.id === participantId);
-    setParticipants(prevParticipants => prevParticipants.filter(p => p.id !== participantId));
+    setParticipants(prevParticipants => {
+      const updatedParticipants = prevParticipants.filter(p => p.id !== participantId);
+      storeParticipants(updatedParticipants);
+      return updatedParticipants;
+    });
     toast({
       title: "Participant Deleted",
       description: `${participantToDelete?.name || 'Participant'} has been removed.`,
@@ -143,7 +188,7 @@ export default function ParticipantsPage() {
                 type="number"
                 id="year"
                 placeholder="e.g., 1"
-                value={newYear === "" ? "" : newYear} // Handle empty input string for number
+                value={newYear === "" ? "" : newYear} 
                 onChange={(e) => {
                     const val = e.target.value;
                     if (val === "") {
@@ -152,8 +197,10 @@ export default function ParticipantsPage() {
                         const numVal = parseInt(val, 10);
                          if (!isNaN(numVal) && [1, 2, 3].includes(numVal)) {
                             setNewYear(numVal as 1 | 2 | 3);
-                        } else if (val.length <=1 && !isNaN(numVal) ) { // Allow typing single digit
-                             setNewYear(val as any); // Temporarily allow other numbers if user is typing
+                        } else if (val.length <=1 && !isNaN(numVal) && numVal >=1 && numVal <=3) { 
+                             setNewYear(numVal as any); 
+                        } else if (val.length <=1 && (val === "" || (numVal >=0 && numVal <=9 && !isNaN(numVal)))) {
+                             setNewYear(val as any);
                         }
                     }
                 }}
@@ -199,7 +246,12 @@ export default function ParticipantsPage() {
           ) : (
             <Table>
               <TableHeader>
-                <TableRow><TableHead className="w-[80px]">Photo</TableHead><TableHead>Name</TableHead><TableHead>Year</TableHead><TableHead className="text-right">Actions</TableHead></TableRow>
+                <TableRow>
+                  <TableHead className="w-[80px]">Photo</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Year</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
               </TableHeader>
               <TableBody>
                 {participants.map((participant) => (

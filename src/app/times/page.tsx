@@ -1,3 +1,4 @@
+
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -25,7 +26,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 import { useToast } from "@/hooks/use-toast";
 import type { Participant } from "@/types";
-import { useState, useEffect } from "react"; // For potential client-side data fetching
+import { useState, useEffect } from "react";
+
+const PARTICIPANTS_STORAGE_KEY = "chronoScoreParticipants"; // Must match the key in participants/page.tsx
 
 const timeInputSchema = z.object({
   participantId: z.string().min(1, "Participant selection is required."),
@@ -43,20 +46,28 @@ const timeInputSchema = z.object({
 
 type TimeInputFormValues = z.infer<typeof timeInputSchema>;
 
-// Mock data - replace with actual data fetching
-const mockParticipants: Participant[] = [
-  { id: "1", name: "Alice Wonderland", year: 1, photoUrl: "https://placehold.co/40x40.png" },
-  { id: "2", name: "Bob The Builder", year: 2, photoUrl: "https://placehold.co/40x40.png" },
-  { id: "3", name: "Charlie Chaplin", year: 3, photoUrl: "https://placehold.co/40x40.png" },
-];
+const getStoredParticipants = (): Participant[] => {
+  if (typeof window !== 'undefined') {
+    const stored = localStorage.getItem(PARTICIPANTS_STORAGE_KEY);
+    if (stored) {
+      try {
+        return JSON.parse(stored) as Participant[];
+      } catch (e) {
+        console.error("Failed to parse participants from localStorage on TimesPage", e);
+        return []; // Return empty array on error
+      }
+    }
+  }
+  return []; // Return empty array if not in client or no data
+};
+
 
 export default function TimesPage() {
   const { toast } = useToast();
   const [participants, setParticipants] = useState<Participant[]>([]);
 
   useEffect(() => {
-    // Simulate fetching participants
-    setParticipants(mockParticipants);
+    setParticipants(getStoredParticipants());
   }, []);
 
 
@@ -70,17 +81,43 @@ export default function TimesPage() {
     },
   });
 
+  // Watch for changes in participants list (e.g., if user navigates back and forth after updates)
+  useEffect(() => {
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key === PARTICIPANTS_STORAGE_KEY) {
+        setParticipants(getStoredParticipants());
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('storage', handleStorageChange);
+      // Also refresh on focus in case localStorage was changed in another tab
+      const refreshOnFocus = () => setParticipants(getStoredParticipants());
+      window.addEventListener('focus', refreshOnFocus);
+
+
+      return () => {
+        window.removeEventListener('storage', handleStorageChange);
+        window.removeEventListener('focus', refreshOnFocus);
+      };
+    }
+  }, []);
+
+
   async function onSubmit(values: TimeInputFormValues) {
     // Simulate API call
     console.log("Form submitted:", values);
     await new Promise(resolve => setTimeout(resolve, 1000)); 
     
+    const selectedParticipant = participants.find(p => p.id === values.participantId);
     toast({
       title: "Time Recorded Successfully!",
-      description: `Times for ${participants.find(p => p.id === values.participantId)?.name || 'Participant'} have been saved.`,
+      description: `Times for ${selectedParticipant?.name || 'Participant'} have been saved.`,
       variant: "default",
     });
-    form.reset(); // Reset form after successful submission
+    form.reset(); 
+    // Potentially re-fetch participants if submission could change the list,
+    // but for this page, it's unlikely.
   }
 
   return (
@@ -102,13 +139,28 @@ export default function TimesPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Participant</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select 
+                      onValueChange={(value) => {
+                        field.onChange(value);
+                        // If participants list could become empty, reset selection
+                        if (participants.length > 0 && !participants.find(p => p.id === value)) {
+                           form.resetField("participantId");
+                        }
+                      }} 
+                      value={field.value} // Ensure value is controlled
+                      defaultValue={field.value}
+                    >
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select a participant" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
+                        {participants.length === 0 && (
+                           <div className="p-4 text-sm text-muted-foreground text-center">
+                             No participants found. Please add participants on the Participants page.
+                           </div>
+                        )}
                         {participants.map((participant) => (
                           <SelectItem key={participant.id} value={participant.id}>
                             {participant.name} (Year {participant.year})
@@ -172,7 +224,7 @@ export default function TimesPage() {
                 )}
               />
               <div className="flex justify-end">
-                <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled={form.formState.isSubmitting}>
+                <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled={form.formState.isSubmitting || participants.length === 0}>
                   {form.formState.isSubmitting ? "Saving..." : "Save Times"}
                 </Button>
               </div>
@@ -183,3 +235,4 @@ export default function TimesPage() {
     </>
   );
 }
+
