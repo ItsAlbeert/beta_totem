@@ -10,11 +10,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import type { Participant } from "@/types";
+import type { Participant, Score } from "@/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 
 const PARTICIPANTS_STORAGE_KEY = "chronoScoreParticipants";
+const SCORES_STORAGE_KEY = "chronoScoreScores"; // For deleting associated scores
 
 // Initial mock data if localStorage is empty
 const initialMockParticipants: Participant[] = [
@@ -33,7 +34,7 @@ const getStoredParticipants = (): Participant[] | null => {
         return JSON.parse(stored) as Participant[];
       } catch (e) {
         console.error("Failed to parse participants from localStorage", e);
-        localStorage.removeItem(PARTICIPANTS_STORAGE_KEY); // Clear corrupted data
+        localStorage.removeItem(PARTICIPANTS_STORAGE_KEY);
         return null;
       }
     }
@@ -47,6 +48,29 @@ const storeParticipants = (participants: Participant[]) => {
   }
 };
 
+const getStoredScores = (): Score[] => {
+  if (typeof window !== 'undefined') {
+    const stored = localStorage.getItem(SCORES_STORAGE_KEY);
+    if (stored) {
+      try {
+        return JSON.parse(stored) as Score[];
+      } catch (e) {
+        console.error("Failed to parse scores from localStorage", e);
+        localStorage.removeItem(SCORES_STORAGE_KEY);
+        return [];
+      }
+    }
+  }
+  return [];
+};
+
+const storeScores = (scores: Score[]) => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(SCORES_STORAGE_KEY, JSON.stringify(scores));
+  }
+};
+
+
 export default function ParticipantsPage() {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,12 +81,17 @@ export default function ParticipantsPage() {
 
   useEffect(() => {
     const storedParticipants = getStoredParticipants();
-    if (storedParticipants) {
+    if (storedParticipants && storedParticipants.length > 0) {
       setParticipants(storedParticipants);
     } else {
       // If no participants in localStorage, initialize with mocks and store them
-      setParticipants(initialMockParticipants);
-      storeParticipants(initialMockParticipants);
+      // Only do this if localStorage is genuinely empty or unparsable for participants
+      if (!localStorage.getItem(PARTICIPANTS_STORAGE_KEY)) {
+        setParticipants(initialMockParticipants);
+        storeParticipants(initialMockParticipants);
+      } else {
+        setParticipants([]); // if localStorage had something (maybe empty array string)
+      }
     }
     setLoading(false);
   }, []);
@@ -117,8 +146,8 @@ export default function ParticipantsPage() {
       setNewName("");
       setNewYear(1);
       setNewPhoto(null);
-      const form = e.target as HTMLFormElement;
-      form.reset(); // Reset file input as well
+      const fileInput = document.getElementById('photo') as HTMLInputElement;
+      if (fileInput) fileInput.value = ""; // Reset file input
     };
 
 
@@ -133,7 +162,7 @@ export default function ParticipantsPage() {
           description: "Could not read the photo file.",
           variant: "destructive",
         });
-         processParticipantAddition(); // Add participant without photo on error
+         processParticipantAddition(); 
       };
       reader.readAsDataURL(newPhoto);
     } else {
@@ -148,9 +177,15 @@ export default function ParticipantsPage() {
       storeParticipants(updatedParticipants);
       return updatedParticipants;
     });
+
+    // Also delete associated scores
+    const currentScores = getStoredScores();
+    const updatedScores = currentScores.filter(score => score.participantId !== participantId);
+    storeScores(updatedScores);
+
     toast({
       title: "Participant Deleted",
-      description: `${participantToDelete?.name || 'Participant'} has been removed.`,
+      description: `${participantToDelete?.name || 'Participant'} and their scores have been removed.`,
       variant: "destructive",
     });
   };
@@ -197,10 +232,8 @@ export default function ParticipantsPage() {
                         const numVal = parseInt(val, 10);
                          if (!isNaN(numVal) && [1, 2, 3].includes(numVal)) {
                             setNewYear(numVal as 1 | 2 | 3);
-                        } else if (val.length <=1 && !isNaN(numVal) && numVal >=1 && numVal <=3) { 
-                             setNewYear(numVal as any); 
-                        } else if (val.length <=1 && (val === "" || (numVal >=0 && numVal <=9 && !isNaN(numVal)))) {
-                             setNewYear(val as any);
+                        } else if (val.length <=1 && !isNaN(numVal) && numVal >=0 && numVal <=9) { 
+                             setNewYear(val as any); 
                         }
                     }
                 }}

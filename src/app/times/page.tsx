@@ -25,10 +25,11 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 import { useToast } from "@/hooks/use-toast";
-import type { Participant } from "@/types";
+import type { Participant, Score } from "@/types";
 import { useState, useEffect } from "react";
 
-const PARTICIPANTS_STORAGE_KEY = "chronoScoreParticipants"; // Must match the key in participants/page.tsx
+const PARTICIPANTS_STORAGE_KEY = "chronoScoreParticipants";
+const SCORES_STORAGE_KEY = "chronoScoreScores";
 
 const timeInputSchema = z.object({
   participantId: z.string().min(1, "Participant selection is required."),
@@ -54,13 +55,34 @@ const getStoredParticipants = (): Participant[] => {
         return JSON.parse(stored) as Participant[];
       } catch (e) {
         console.error("Failed to parse participants from localStorage on TimesPage", e);
-        return []; // Return empty array on error
+        return [];
       }
     }
   }
-  return []; // Return empty array if not in client or no data
+  return [];
 };
 
+const getStoredScores = (): Score[] => {
+  if (typeof window !== 'undefined') {
+    const stored = localStorage.getItem(SCORES_STORAGE_KEY);
+    if (stored) {
+      try {
+        return JSON.parse(stored) as Score[];
+      } catch (e) {
+        console.error("Failed to parse scores from localStorage", e);
+        localStorage.removeItem(SCORES_STORAGE_KEY); // Clear corrupted data
+        return [];
+      }
+    }
+  }
+  return [];
+};
+
+const storeScores = (scores: Score[]) => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(SCORES_STORAGE_KEY, JSON.stringify(scores));
+  }
+};
 
 export default function TimesPage() {
   const { toast } = useToast();
@@ -69,7 +91,6 @@ export default function TimesPage() {
   useEffect(() => {
     setParticipants(getStoredParticipants());
   }, []);
-
 
   const form = useForm<TimeInputFormValues>({
     resolver: zodResolver(timeInputSchema),
@@ -81,43 +102,75 @@ export default function TimesPage() {
     },
   });
 
-  // Watch for changes in participants list (e.g., if user navigates back and forth after updates)
   useEffect(() => {
     const handleStorageChange = (event: StorageEvent) => {
       if (event.key === PARTICIPANTS_STORAGE_KEY) {
         setParticipants(getStoredParticipants());
+        // If the currently selected participant was deleted, reset the field
+        const currentSelectedId = form.getValues("participantId");
+        if (currentSelectedId && !getStoredParticipants().find(p => p.id === currentSelectedId)) {
+            form.resetField("participantId");
+            form.setValue("participantId", ""); // Explicitly set to empty
+        }
       }
     };
 
     if (typeof window !== 'undefined') {
       window.addEventListener('storage', handleStorageChange);
-      // Also refresh on focus in case localStorage was changed in another tab
-      const refreshOnFocus = () => setParticipants(getStoredParticipants());
+      const refreshOnFocus = () => {
+        setParticipants(getStoredParticipants());
+         const currentSelectedId = form.getValues("participantId");
+        if (currentSelectedId && !getStoredParticipants().find(p => p.id === currentSelectedId)) {
+            form.resetField("participantId");
+            form.setValue("participantId", ""); 
+        }
+      }
       window.addEventListener('focus', refreshOnFocus);
-
 
       return () => {
         window.removeEventListener('storage', handleStorageChange);
         window.removeEventListener('focus', refreshOnFocus);
       };
     }
-  }, []);
-
+  }, [form]);
 
   async function onSubmit(values: TimeInputFormValues) {
-    // Simulate API call
-    console.log("Form submitted:", values);
-    await new Promise(resolve => setTimeout(resolve, 1000)); 
-    
     const selectedParticipant = participants.find(p => p.id === values.participantId);
+    if (!selectedParticipant) {
+      toast({
+        title: "Error",
+        description: "Selected participant not found.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const physicalTime = values.physicalTime;
+    const mentalTime = values.mentalTime;
+    const extraTime = values.extraTime || 0;
+    const weightedTotalTime = physicalTime + (mentalTime * 3) - extraTime;
+
+    const newScore: Score = {
+      id: Date.now().toString(),
+      participantId: values.participantId,
+      physicalTime: physicalTime,
+      mentalTime: mentalTime,
+      extraTime: extraTime,
+      weightedTotalTime: weightedTotalTime,
+      recordedAt: new Date().toISOString(),
+    };
+
+    const existingScores = getStoredScores();
+    const updatedScores = [...existingScores, newScore];
+    storeScores(updatedScores);
+    
     toast({
       title: "Time Recorded Successfully!",
-      description: `Times for ${selectedParticipant?.name || 'Participant'} have been saved.`,
+      description: `Times for ${selectedParticipant.name} have been saved. Weighted total: ${weightedTotalTime} min.`,
       variant: "default",
     });
-    form.reset(); 
-    // Potentially re-fetch participants if submission could change the list,
-    // but for this page, it's unlikely.
+    form.reset();
+    form.setValue("participantId", ""); // Ensure dropdown placeholder shows
   }
 
   return (
@@ -142,13 +195,8 @@ export default function TimesPage() {
                     <Select 
                       onValueChange={(value) => {
                         field.onChange(value);
-                        // If participants list could become empty, reset selection
-                        if (participants.length > 0 && !participants.find(p => p.id === value)) {
-                           form.resetField("participantId");
-                        }
                       }} 
-                      value={field.value} // Ensure value is controlled
-                      defaultValue={field.value}
+                      value={field.value}
                     >
                       <FormControl>
                         <SelectTrigger>
@@ -180,7 +228,7 @@ export default function TimesPage() {
                   <FormItem>
                     <FormLabel>Physical Challenge Time (minutes)</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="e.g., 30" {...field} />
+                      <Input type="number" placeholder="e.g., 30" {...field} step="any" />
                     </FormControl>
                     <FormDescription>
                       Time taken for the physical challenge.
@@ -197,7 +245,7 @@ export default function TimesPage() {
                   <FormItem>
                     <FormLabel>Mental Challenge Time (minutes)</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="e.g., 15" {...field} />
+                      <Input type="number" placeholder="e.g., 15" {...field} step="any"/>
                     </FormControl>
                     <FormDescription>
                       Time taken for the mental challenge.
@@ -214,7 +262,7 @@ export default function TimesPage() {
                   <FormItem>
                     <FormLabel>Extra Bonus Time (minutes, optional)</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="e.g., 5" {...field} />
+                      <Input type="number" placeholder="e.g., 5" {...field} step="any"/>
                     </FormControl>
                     <FormDescription>
                       Bonus time to be subtracted (e.g., for completing tasks quickly).
@@ -235,4 +283,3 @@ export default function TimesPage() {
     </>
   );
 }
-
