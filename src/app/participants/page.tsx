@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import type { Participant } from "@/types";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/hooks/use-toast";
 
 // Mock data - replace with actual data fetching
 const mockParticipants: Participant[] = [
@@ -26,59 +27,97 @@ export default function ParticipantsPage() {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [loading, setLoading] = useState(true);
   const [newName, setNewName] = useState("");
-  const [newYear, setNewYear] = useState("");
+  const [newYear, setNewYear] = useState<1 | 2 | 3 | "">(1); // Ensure year is one of the allowed types or empty for input
   const [newPhoto, setNewPhoto] = useState<File | null>(null);
+  const { toast } = useToast();
 
   useEffect(() => {
-    // Simulate fetching participants
-    const timer = setTimeout(() => {
-      setParticipants(mockParticipants);
-      setLoading(false);
-    }, 1000);
-    return () => clearTimeout(timer);
-  }, []);
+    // Simulate fetching participants only if the list is empty
+    if (participants.length === 0) {
+      const timer = setTimeout(() => {
+        setParticipants(mockParticipants);
+        setLoading(false);
+      }, 1000);
+      return () => clearTimeout(timer);
+    } else {
+      setLoading(false); // Already have data, no need to load mock
+    }
+  }, [participants.length]); // Rerun if participants.length changes (e.g. all deleted)
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    // This is where you would handle the form submission,
-    // including uploading the photo and saving the participant data.
-    // This requires backend logic.
 
-    console.log("New Participant Data:", {
+    if (!newName || !newYear) {
+      toast({
+        title: "Error",
+        description: "Name and year are required.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    const numericYear = parseInt(newYear.toString(), 10);
+    if (isNaN(numericYear) || ![1, 2, 3].includes(numericYear)) {
+         toast({
+            title: "Error",
+            description: "Year must be 1, 2, or 3.",
+            variant: "destructive",
+        });
+        return;
+    }
+
+
+    const newParticipant: Participant = {
+      id: Date.now().toString(), // Simple unique ID for client-side
       name: newName,
-      year: newYear,
-      photo: newPhoto, // This will be a File object
-    });
+      year: numericYear as 1 | 2 | 3,
+    };
 
-    // Reset form fields after submission attempt
+    if (newPhoto) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        newParticipant.photoUrl = reader.result as string;
+        setParticipants(prevParticipants => [...prevParticipants, newParticipant]);
+        toast({
+          title: "Participant Added",
+          description: `${newParticipant.name} has been added.`,
+        });
+      };
+      reader.readAsDataURL(newPhoto);
+    } else {
+      setParticipants(prevParticipants => [...prevParticipants, newParticipant]);
+      toast({
+        title: "Participant Added",
+        description: `${newParticipant.name} has been added.`,
+      });
+    }
+
+    // Reset form fields
     setNewName("");
-    setNewYear("");
+    setNewYear(1);
     setNewPhoto(null);
-    // Clear file input value if possible (might require a ref or specific component logic)
     const form = e.target as HTMLFormElement;
-    form.reset(); // Resets all form controls to their initial values
+    form.reset();
   };
 
   const handleDelete = (participantId: string) => {
-    // This is where you would handle participant deletion.
-    // This requires backend logic to remove the participant from your data source.
-
-    console.log(`Attempting to delete participant with ID: ${participantId}`);
-
-    // For a frontend-only demonstration with mock data,
-    // you could filter the participants list to remove the participant:
-    // setParticipants(participants.filter(p => p.id !== participantId));
+    const participantToDelete = participants.find(p => p.id === participantId);
+    setParticipants(prevParticipants => prevParticipants.filter(p => p.id !== participantId));
+    toast({
+      title: "Participant Deleted",
+      description: `${participantToDelete?.name || 'Participant'} has been removed.`,
+      variant: "destructive",
+    });
   };
 
   return (
     <>
       <PageHeader
         title="Participants"
-        description="View all registered participants in the competition."
+        description="View and manage registered participants in the competition."
       />
 
-      {/* New Card for adding participant */}
-      <Card className="shadow-lg mb-6"> {/* Added margin-bottom */}
+      <Card className="shadow-lg mb-6">
         <CardHeader>
           <CardTitle>Add New Participant</CardTitle>
           <CardDescription>
@@ -99,13 +138,27 @@ export default function ParticipantsPage() {
               />
             </div>
             <div className="grid w-full max-w-sm items-center gap-1.5">
-              <Label htmlFor="year">Year</Label>
+              <Label htmlFor="year">Year (1, 2, or 3)</Label>
               <Input
                 type="number"
                 id="year"
                 placeholder="e.g., 1"
-                value={newYear}
-                onChange={(e) => setNewYear(e.target.value)}
+                value={newYear === "" ? "" : newYear} // Handle empty input string for number
+                onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === "") {
+                        setNewYear("");
+                    } else {
+                        const numVal = parseInt(val, 10);
+                         if (!isNaN(numVal) && [1, 2, 3].includes(numVal)) {
+                            setNewYear(numVal as 1 | 2 | 3);
+                        } else if (val.length <=1 && !isNaN(numVal) ) { // Allow typing single digit
+                             setNewYear(val as any); // Temporarily allow other numbers if user is typing
+                        }
+                    }
+                }}
+                min="1"
+                max="3"
                 required
               />
             </div>
@@ -123,13 +176,11 @@ export default function ParticipantsPage() {
         </CardContent>
       </Card>
 
-
-      {/* Existing Card for participant list */}
       <Card className="shadow-lg">
         <CardHeader>
           <CardTitle>Participant List</CardTitle>
           <CardDescription>
-            A list of all participants. Full management is available via Strapi.
+            A list of all participants.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -176,7 +227,7 @@ export default function ParticipantsPage() {
             </Table>
           )}
            {participants.length === 0 && !loading && (
-            <p className="text-center text-muted-foreground py-8">No participants found.</p>
+            <p className="text-center text-muted-foreground py-8">No participants found. Add some using the form above!</p>
           )}
         </CardContent>
       </Card>
