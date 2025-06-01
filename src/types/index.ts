@@ -22,19 +22,19 @@ export interface Score {
   id: string; // Firestore document ID
   participantId: string;
   
-  // Raw inputs for the new scoring system
   tiempo_fisico: number;   // Raw physical time in minutes
   tiempo_mental: number;   // Raw mental time in minutes
-  estado_extra: ExtraChallengeStatus; // Status of the extra challenge(s)
+  
+  // New: Status for each individual extra game
+  extraGameStatuses?: { [gameId: string]: ExtraChallengeStatus }; 
 
-  gameTimes?: { [gameId: string]: number }; // Optional: individual game times, not used in SF calculation
+  gameTimes?: { [gameId: string]: number }; // Optional: individual game times for Physical/Mental
   recordedAt: string; // ISO string date (converted from Firestore Timestamp)
 
-  // Calculated scores based on the new system (will be calculated on the fly, not stored in Firestore directly with raw input)
-  // These fields might be added when processing data for display rather than storing them back if they depend on global min/max
+  // Calculated scores (will be calculated on the fly)
   puntuacion_fisica_normalizada?: number; // S_p
   puntuacion_mental_normalizada?: number; // S_m
-  ajuste_extra_minutos?: number; // E
+  ajuste_extra_minutos?: number; // E (for extra challenges)
   puntuacion_extra_normalizada?: number; // S_e
   puntuacion_final_ponderada?: number;  // SF
 }
@@ -43,12 +43,11 @@ export interface Score {
 export interface LeaderboardEntry extends Participant {
   rank: number;
   
-  // Raw times from latest score for reference (optional, SF is primary)
   latest_tiempo_fisico: number;
   latest_tiempo_mental: number;
-  latest_estado_extra: ExtraChallengeStatus;
+  // Store the processed extra game statuses for display if needed
+  latest_extra_game_statuses?: { [gameId: string]: ExtraChallengeStatus }; 
   
-  // Calculated scores
   puntuacion_fisica_normalizada: number; // S_p
   puntuacion_mental_normalizada: number; // S_m
   ajuste_extra_minutos: number;          // E
@@ -56,11 +55,11 @@ export interface LeaderboardEntry extends Participant {
   puntuacion_final_ponderada: number;   // SF
 
   scoreRecordedAt: string; // ISO string of the latest score
-  gameTimes?: { [gameId: string]: number }; // From latest score
+  gameTimes?: { [gameId: string]: number }; // From latest score for Physical/Mental games
 }
 
 export interface PerformanceOverTimeDataPoint {
-  time: string; // Formatted timestamp (e.g., "MMM d, HH:mm") or score instance identifier
+  time: string; 
   [participantNameOrScoreKey: string]: number | string | null; 
 }
 

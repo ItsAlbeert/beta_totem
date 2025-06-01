@@ -38,10 +38,8 @@ const timeInputSchema = z.object({
   tiempo_mental: z.coerce
     .number({ invalid_type_error: "Mental time must be a number." })
     .min(0, "Mental time cannot be negative."),
-  estado_extra: z.enum(['no_hecho', 'hecho_a_medias', 'hecho'], {
-    required_error: "Extra challenge status is required.",
-  }),
   gameTimes: z.record(z.string(), z.coerce.number().min(0, "Game time cannot be negative.").optional()).optional(),
+  extraGameStatuses: z.record(z.string(), z.enum(['no_hecho', 'hecho_a_medias', 'hecho'])).optional(),
 });
 
 type TimeInputFormValues = z.infer<typeof timeInputSchema>;
@@ -66,15 +64,14 @@ export default function TimesPage() {
       participantId: "",
       tiempo_fisico: 0,
       tiempo_mental: 0,
-      estado_extra: "no_hecho",
       gameTimes: {},
+      extraGameStatuses: {},
     },
   });
 
   const addScoreMutation = useMutation({
     mutationFn: addScore,
     onSuccess: (newScore) => {
-      // Invalidate queries that depend on scores to refetch and recalculate
       queryClient.invalidateQueries({ queryKey: ["scores"] });
       queryClient.invalidateQueries({ queryKey: ["dashboardData"] }); 
       queryClient.invalidateQueries({ queryKey: ["leaderboardData"] });
@@ -84,15 +81,22 @@ export default function TimesPage() {
       const participantName = participants.find(p => p.id === newScore.participantId)?.name || "Participant";
       toast({
         title: "Score Recorded Successfully!",
-        description: `Raw times for ${participantName} have been saved. Final scores will be calculated globally.`,
+        description: `Raw data for ${participantName} saved. Scores updated globally.`,
         variant: "default",
       });
+      
+      // Reset form, ensuring extraGameStatuses are also reset
+      const defaultExtraStatuses: { [key: string]: ExtraChallengeStatus } = {};
+      games.filter(g => g.category === 'Extra').forEach(g => {
+        defaultExtraStatuses[g.id] = 'no_hecho';
+      });
+
       form.reset({ 
         participantId: "",
         tiempo_fisico: 0,
         tiempo_mental: 0,
-        estado_extra: "no_hecho",
         gameTimes: {},
+        extraGameStatuses: defaultExtraStatuses,
       });
     },
     onError: (error) => {
@@ -103,6 +107,20 @@ export default function TimesPage() {
       });
     },
   });
+
+  // Initialize extraGameStatuses in defaultValues when games are loaded
+  React.useEffect(() => {
+    if (games.length > 0) {
+      const initialExtraStatuses: { [key: string]: ExtraChallengeStatus } = {};
+      games.filter(g => g.category === 'Extra').forEach(g => {
+        initialExtraStatuses[g.id] = 'no_hecho';
+      });
+      form.reset((currentValues) => ({
+        ...currentValues,
+        extraGameStatuses: initialExtraStatuses,
+      }));
+    }
+  }, [games, form.reset]);
 
 
   async function onSubmit(values: TimeInputFormValues) {
@@ -115,24 +133,22 @@ export default function TimesPage() {
       });
       return;
     }
-
-    // Prepare the raw score data as per the new system
-    // The actual S_p, S_m, S_e, SF calculations will happen in data-utils, based on global min/max times
-    const newScoreData: Omit<Score, "id" | "recordedAt" | "puntuacion_fisica_normalizada" | "puntuacion_mental_normalizada" | "ajuste_extra_minutos" | "puntuacion_extra_normalizada" | "puntuacion_final_ponderada"> & { recordedAt: Date } = {
+    
+    const newScoreData = {
       participantId: values.participantId,
       tiempo_fisico: values.tiempo_fisico,
       tiempo_mental: values.tiempo_mental,
-      estado_extra: values.estado_extra as ExtraChallengeStatus,
-      gameTimes: values.gameTimes || {}, // Keep logging game times if desired
+      gameTimes: values.gameTimes || {},
+      extraGameStatuses: values.extraGameStatuses || {},
       recordedAt: new Date(),
     };
     
-    addScoreMutation.mutate(newScoreData as any); // Cast to any if Score type expects calculated fields
+    addScoreMutation.mutate(newScoreData as any);
   }
 
   const renderGameTimeFields = (category: GameCategory) => {
     const categoryGames = games.filter(game => game.category === category);
-    if (categoryGames.length === 0) return null;
+    if (categoryGames.length === 0 || category === 'Extra') return null; // 'Extra' games handled by renderGameStatusFields
 
     return (
       <div className="mt-4 space-y-4">
@@ -165,11 +181,53 @@ export default function TimesPage() {
     );
   };
 
+  const renderGameStatusFields = () => {
+    const extraGames = games.filter(game => game.category === 'Extra');
+    if (extraGames.length === 0) return null;
+
+    return (
+      <div className="mt-4 space-y-4">
+        <h4 className="text-md font-semibold text-muted-foreground">Extra Games Status</h4>
+        {extraGames.map(game => (
+          <FormField
+            key={game.id}
+            control={form.control}
+            name={`extraGameStatuses.${game.id}`}
+            defaultValue={'no_hecho' as ExtraChallengeStatus} // Default for each extra game
+            render={({ field }) => (
+              <FormItem className="ml-4">
+                <FormLabel>{game.name}</FormLabel>
+                <Select
+                  onValueChange={field.onChange}
+                  value={field.value}
+                  disabled={addScoreMutation.isPending || isLoadingGames}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="no_hecho">No Hecho</SelectItem>
+                    <SelectItem value="hecho_a_medias">Hecho a Medias</SelectItem>
+                    <SelectItem value="hecho">Hecho</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        ))}
+      </div>
+    );
+  };
+
+
   return (
     <>
       <PageHeader
-        title="Record Times"
-        description="Enter total physical, mental, and extra challenge status for a participant."
+        title="Record Times & Status"
+        description="Enter total physical, mental times, and status for extra challenges."
       />
       <Card className="max-w-2xl mx-auto shadow-lg hover:shadow-xl transition-shadow duration-300">
         <CardHeader>
@@ -225,7 +283,7 @@ export default function TimesPage() {
                       <Input type="number" placeholder="e.g., 340.25" {...field} step="any" disabled={addScoreMutation.isPending} />
                     </FormControl>
                     <FormDescription>
-                      Total time for all physical challenges (e.g., map search, run, tests).
+                      Total time for all physical challenges.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -245,7 +303,7 @@ export default function TimesPage() {
                       <Input type="number" placeholder="e.g., 125.0" {...field} step="any" disabled={addScoreMutation.isPending}/>
                     </FormControl>
                     <FormDescription>
-                      Total time for all mental challenges (e.g., puzzles, enigmas).
+                      Total time for all mental challenges.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -254,37 +312,9 @@ export default function TimesPage() {
               {renderGameTimeFields("Mental")}
               
               <Separator />
-
-              <FormField
-                control={form.control}
-                name="estado_extra"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Extra Challenge Status</FormLabel>
-                     <Select
-                      onValueChange={field.onChange}
-                      value={field.value}
-                      disabled={addScoreMutation.isPending}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select status" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="no_hecho">No Hecho</SelectItem>
-                        <SelectItem value="hecho_a_medias">Hecho a Medias</SelectItem>
-                        <SelectItem value="hecho">Hecho</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormDescription>
-                      Status of completion for the extra challenge(s).
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              {renderGameTimeFields("Extra")}
+              
+              {/* Render status fields for Extra games */}
+              {renderGameStatusFields()}
               
               <Separator />
               
@@ -294,7 +324,7 @@ export default function TimesPage() {
                   className="bg-primary hover:bg-primary/90 text-primary-foreground" 
                   disabled={addScoreMutation.isPending || participants.length === 0 || isLoadingParticipants || isLoadingGames}
                 >
-                  {addScoreMutation.isPending ? "Saving..." : "Save Raw Times"}
+                  {addScoreMutation.isPending ? "Saving..." : "Save Data"}
                 </Button>
               </div>
             </form>

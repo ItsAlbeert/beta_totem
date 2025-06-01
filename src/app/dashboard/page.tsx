@@ -7,19 +7,19 @@ import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { Participant, Score, Game, LeaderboardEntry } from "@/types";
+import type { Participant, Score, Game, LeaderboardEntry, ExtraChallengeStatus } from "@/types";
 import { Icons } from "@/components/icons";
 import { formatDistanceToNowStrict } from 'date-fns';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { getParticipants, getGames, getScores, getRecentScores } from "@/lib/firestore-services";
-import { calculateAllParticipantScores } from "@/lib/data-utils"; // Updated import
+import { calculateAllParticipantScores } from "@/lib/data-utils"; 
 
 interface DashboardData {
   totalParticipants: number;
   totalGames: number;
-  averageFinalScore: number | null; // Changed from averageWeightedTime
-  topPerformers: LeaderboardEntry[]; // LeaderboardEntry now uses the new scoring system
-  recentScoresData: (Score & { participantName?: string, finalScoreDisplay?: string })[]; // Added finalScoreDisplay
+  averageFinalScore: number | null; 
+  topPerformers: LeaderboardEntry[]; 
+  recentScoresData: (Score & { participantName?: string, scoreSummary?: string })[]; 
   totalScoresLogged: number;
 }
 
@@ -48,7 +48,7 @@ export default function DashboardPage() {
   });
   
   const { data: recentScoresRaw = [], isLoading: isLoadingRecentScores, error: errorRecentScores } = useQuery<Score[]>({
-    queryKey: ["recentScores"], // This will fetch raw scores
+    queryKey: ["recentScores"],
     queryFn: () => getRecentScores(5),
   });
 
@@ -57,7 +57,7 @@ export default function DashboardPage() {
 
 
   const dashboardData = useMemo((): DashboardData | null => {
-    if (isLoadingOverall || overallError || !participants.length) { // Check for participants presence
+    if (isLoadingOverall || overallError || !participants.length || !games) { 
       return null; 
     }
 
@@ -69,8 +69,8 @@ export default function DashboardPage() {
     let topPerformers: LeaderboardEntry[] = [];
     let averageFinalScore: number | null = null;
 
-    if (allScores.length > 0 && participants.length > 0) {
-        const leaderboard = calculateAllParticipantScores(participants, allScores);
+    if (allScores.length > 0 && participants.length > 0 && games.length > 0) {
+        const leaderboard = calculateAllParticipantScores(participants, allScores, games);
         topPerformers = leaderboard.slice(0, 3);
 
         const finalScoresList = leaderboard.map(entry => entry.puntuacion_final_ponderada);
@@ -79,14 +79,25 @@ export default function DashboardPage() {
         : null;
     }
       
-    // For recent scores, we can display the raw times or a placeholder if SF isn't calculated for them individually here
-    const recentScoresData = recentScoresRaw.map(score => ({
-        ...score,
-        participantName: participantsMap.get(score.participantId) || "Unknown",
-        // SF is calculated globally, so for recent raw scores, we might not have it easily
-        // We can show raw times or a note.
-        finalScoreDisplay: `T_F: ${score.tiempo_fisico.toFixed(1)}, T_M: ${score.tiempo_mental.toFixed(1)}, Extra: ${score.estado_extra.replace('_', ' ')}`
-    }));
+    const recentScoresData = recentScoresRaw.map(score => {
+        let extraSummary = "N/A";
+        if (score.extraGameStatuses) {
+            const completed = Object.values(score.extraGameStatuses).filter(s => s === 'hecho').length;
+            const partial = Object.values(score.extraGameStatuses).filter(s => s === 'hecho_a_medias').length;
+            const totalExtra = Object.keys(score.extraGameStatuses).length;
+            if (totalExtra > 0) {
+                 extraSummary = `${completed} done, ${partial} partial`;
+            } else {
+                extraSummary = "No extra games";
+            }
+        }
+
+        return {
+            ...score,
+            participantName: participantsMap.get(score.participantId) || "Unknown",
+            scoreSummary: `T_F: ${score.tiempo_fisico.toFixed(1)}, T_M: ${score.tiempo_mental.toFixed(1)}, Extra: ${extraSummary}`
+        };
+    });
 
 
     return {
@@ -223,11 +234,11 @@ export default function DashboardPage() {
                           {score.participantName}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                         {score.finalScoreDisplay}
+                         {score.scoreSummary}
                         </p>
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        {formatDistanceToNowStrict(new Date(score.recordedAt), { addSuffix: true })}
+                        {score.recordedAt ? formatDistanceToNowStrict(new Date(score.recordedAt), { addSuffix: true }) : 'Invalid date'}
                       </p>
                     </li>
                   ))}

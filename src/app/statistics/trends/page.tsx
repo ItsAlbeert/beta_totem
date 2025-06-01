@@ -15,7 +15,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { getParticipants, getScores, getGames } from "@/lib/firestore-services";
-import { calculateAllParticipantScores } from "@/lib/data-utils"; // For SF scores
+import { calculateAllParticipantScores } from "@/lib/data-utils"; 
 
 const chartColors = [
   "hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))",
@@ -26,9 +26,9 @@ const getColor = (index: number) => chartColors[index % chartColors.length];
 
 interface ProcessedPageData {
   participants: Participant[];
-  allScores: Score[]; // All raw scores
+  allScores: Score[]; 
   games: Game[];
-  leaderboardForLatestScores: LeaderboardEntry[]; // Processed scores (S_p, S_m, SF etc.) for latest entry of each participant
+  leaderboardForLatestScores: LeaderboardEntry[]; 
   participantsMap: Map<string, Participant>;
   gamesMap: Map<string, Game>;
 }
@@ -53,19 +53,17 @@ export default function TrendsPage() {
   const overallError = errorParticipants || errorScores || errorGames;
 
   const processedData = useMemo((): ProcessedPageData | null => {
-    if (isLoadingOverall || overallError) return null;
+    if (isLoadingOverall || overallError || !participants.length || !allScores.length || !games.length) return null;
 
     const participantsMap = new Map(participants.map(p => [p.id, p]));
     const gamesMap = new Map(games.map(g => [g.id, g]));
     
-    // Calculate SF etc. for the latest score of each participant
-    const leaderboardForLatestScores = calculateAllParticipantScores(participants, allScores);
+    const leaderboardForLatestScores = calculateAllParticipantScores(participants, allScores, games);
 
     return { participants, allScores, games, leaderboardForLatestScores, participantsMap, gamesMap };
   }, [participants, allScores, games, isLoadingOverall, overallError]);
 
 
-  // Chart for S_p, S_m, S_e (Normalized scores for categories)
   const categoryNormalizedScoreChartData = useMemo(() => {
     if (!processedData) return { Physical: [], Mental: [], Extra: [] };
     const { leaderboardForLatestScores, participantsMap } = processedData;
@@ -80,18 +78,17 @@ export default function TrendsPage() {
     });
 
     Object.keys(result).forEach(cat => {
-        (result[cat as GameCategory] as SingleMetricDataPoint[]).sort((a, b) => (b.score ?? -Infinity) - (a.score ?? -Infinity)); // Higher score is better
+        (result[cat as GameCategory] as SingleMetricDataPoint[]).sort((a, b) => (b.score ?? -Infinity) - (a.score ?? -Infinity));
     });
     return result;
   }, [processedData]);
 
-  // Chart for individual game raw times (from latest score)
   const individualGameChartData = useMemo(() => {
     if (!processedData) return {};
-    const { games, leaderboardForLatestScores, participantsMap } = processedData;
+    const { games: allGames, leaderboardForLatestScores, participantsMap } = processedData; // Renamed games to allGames for clarity
     const result: { [gameId: string]: SingleMetricDataPoint[] } = {};
 
-    games.forEach(game => {
+    allGames.filter(game => game.category === 'Physical' || game.category === 'Mental').forEach(game => {
       result[game.id] = [];
       leaderboardForLatestScores.forEach(entry => {
         const gameTime = entry.gameTimes?.[game.id];
@@ -99,7 +96,7 @@ export default function TrendsPage() {
           result[game.id].push({ name: participantsMap.get(entry.id)?.name || entry.id, score: gameTime });
         }
       });
-      result[game.id].sort((a, b) => (a.score ?? Infinity) - (b.score ?? Infinity)); // Lower time is better for raw game times
+      result[game.id].sort((a, b) => (a.score ?? Infinity) - (b.score ?? Infinity)); 
     });
     return result;
   }, [processedData]);
@@ -113,7 +110,7 @@ export default function TrendsPage() {
     yAxisLabel: string = "Score (pts)", 
     chartKeySuffix: string, 
     mainChart: boolean = false,
-    lowerIsBetter: boolean = false // For raw times
+    lowerIsBetter: boolean = false 
   ) => {
     const chartUniqueKey = `chart-${chartKeySuffix}-${mainChart ? 'main' : 'sub'}`;
     if (isLoadingOverall && !processedData && data.length === 0) return <Skeleton className={cn(mainChart ? "h-[400px]" : "h-[300px]", "w-full shadow-lg")} key={`${chartUniqueKey}-skeleton`} />;
@@ -130,9 +127,14 @@ export default function TrendsPage() {
         <CardContent>
           <ChartContainer config={config} className={cn(mainChart ? "h-[350px]" : "h-[250px]", "w-full")}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data} layout="vertical" margin={{ left: 20, right: 30, top:5, bottom: 20 }}>
+              <BarChart data={data} layout="vertical" margin={{ left: 20, right: 30, top:5, bottom: 35 /* Increased bottom margin */ }}>
                 <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis type="number" stroke="hsl(var(--muted-foreground))" label={{ value: yAxisLabel, position: 'insideBottom', offset: -10, fill: 'hsl(var(--muted-foreground))' }} domain={lowerIsBetter ? ['dataMin', 'auto'] : [0, 'auto']} />
+                <XAxis 
+                    type="number" 
+                    stroke="hsl(var(--muted-foreground))" 
+                    label={{ value: yAxisLabel, position: 'insideBottom', offset: -15 /* Adjusted offset */, fill: 'hsl(var(--muted-foreground))' }} 
+                    domain={lowerIsBetter ? ['auto', 'auto'] : [0, 'auto']} // Adjusted domain for lowerIsBetter
+                />
                 <YAxis 
                   dataKey="name" 
                   type="category" 
@@ -152,27 +154,33 @@ export default function TrendsPage() {
     );
   };
   
-  const renderCategorySection = (category: GameCategory, titleSuffix: string, scoreField: 'puntuacion_fisica_normalizada' | 'puntuacion_mental_normalizada' | 'puntuacion_extra_normalizada') => {
+  const renderCategorySection = (category: GameCategory, titleSuffix: string) => {
     if (isLoadingOverall && !processedData) return <Skeleton className="h-[600px] w-full mb-8 shadow-lg" key={`skeleton-cat-${category}`} />;
     
     const categoryGames = processedData?.games.filter(g => g.category === category) || [];
-    // Use categoryNormalizedScoreChartData for the main category chart
     const categoryTotalData = categoryNormalizedScoreChartData[category] || [];
     
+    const yAxisLabel = category === 'Extra' ? `${category} Score (S_e)` : `${category} Score (S_${category.substring(0,1).toLowerCase()})`;
+    const description = category === 'Extra' 
+      ? `Normalized ${category.toLowerCase()} score (0-100) from status. Higher is better.`
+      : `Normalized ${category.toLowerCase()} score (0-100) from total time. Higher is better.`;
+
     return (
       <div className="mb-12" key={`category-section-${category}`}>
         <h2 className="text-3xl font-semibold mb-6 border-b pb-3 text-foreground">{titleSuffix} Performance (Normalized Scores)</h2>
         {renderBarChart(
-          `Overall ${category} Normalized Score (S_${category.substring(0,1).toLowerCase()})`, 
-          `Normalized ${category.toLowerCase()} score (0-100) for all participants (latest scores). Higher is better.`,
+          `Overall ${category} Normalized Score`, 
+          description,
           categoryTotalData,
           "score",
-          `${category} Score (pts)`,
+          yAxisLabel,
           `total-norm-${category.toLowerCase()}`,
           true,
-          false // Higher is better for normalized scores
+          false 
         )}
-        {categoryGames.length > 0 && (
+
+        {/* Individual game charts for Physical and Mental categories only */}
+        { (category === 'Physical' || category === 'Mental') && categoryGames.length > 0 && (
           <>
             <h3 className="text-2xl font-medium mt-10 mb-6 text-foreground/90">Individual {category} Games (Raw Times)</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -183,18 +191,24 @@ export default function TrendsPage() {
                   "", 
                   individualGameChartData[game.id] || [],
                   "score",
-                  "Time (min)", // Raw time
+                  "Time (min)", 
                   `game-${game.id}`,
                   false,
-                  true // Lower is better for raw times
+                  true 
                 )}
                 </div>
               ))}
             </div>
           </>
         )}
-         {categoryGames.length === 0 && !isLoadingOverall && !overallError && ( 
+         { (category === 'Physical' || category === 'Mental') && categoryGames.length === 0 && !isLoadingOverall && !overallError && ( 
              <p className="text-center text-muted-foreground py-4 mt-6">No {category.toLowerCase()} games defined for this category.</p>
+        )}
+        { category === 'Extra' && categoryGames.length === 0 && !isLoadingOverall && !overallError && (
+            <p className="text-center text-muted-foreground py-4 mt-6">No Extra games defined. Add 'Extra' category games on the Games page to see status-based scores here.</p>
+        )}
+         { category === 'Extra' && categoryGames.length > 0 && (
+            <p className="text-center text-muted-foreground py-4 mt-6">Individual 'Extra' game statuses are part of the overall S_e calculation. View detailed statuses in the Leaderboard.</p>
         )}
       </div>
     );
@@ -219,9 +233,9 @@ export default function TrendsPage() {
           </>
         ) : (
           <>
-            {renderCategorySection('Physical', 'Physical Challenge', 'puntuacion_fisica_normalizada')}
-            {renderCategorySection('Mental', 'Mental Challenge', 'puntuacion_mental_normalizada')}
-            {renderCategorySection('Extra', 'Extra Bonus', 'puntuacion_extra_normalizada')}
+            {renderCategorySection('Physical', 'Physical Challenge')}
+            {renderCategorySection('Mental', 'Mental Challenge')}
+            {renderCategorySection('Extra', 'Extra Bonus')}
           </>
         )}
       </div>

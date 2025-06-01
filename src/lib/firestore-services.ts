@@ -45,7 +45,7 @@ export async function deleteParticipant(participantId: string): Promise<void> {
   scoresSnapshot.forEach(doc => {
     batch.delete(doc.ref);
   });
-  batch.delete(doc(db, PARTICIPANTS_COLLECTION, participantId));
+  batch.delete(doc(db, PARTICIPIPANTS_COLLECTION, participantId));
   
   await batch.commit();
 }
@@ -54,13 +54,15 @@ export async function deleteParticipant(participantId: string): Promise<void> {
 const GAMES_COLLECTION = "games";
 
 export async function getGames(): Promise<Game[]> {
-  const q = query(collection(db, GAMES_COLLECTION), orderBy("name"));
+  const q = query(collection(db, GAMES_COLLECTION), orderBy("name")); // Simple sort by name
   const snapshot = await getDocs(q);
   const gamesList = snapshot.docs.map(doc => mapDocToDataWithId<Game>(doc));
 
+  // Client-side sort for category priority then name
   return gamesList.sort((a, b) => {
-    if (a.category < b.category) return -1;
-    if (a.category > b.category) return 1;
+    const categoryOrder: Record<Game['category'], number> = { 'Physical': 1, 'Mental': 2, 'Extra': 3 };
+    if (categoryOrder[a.category] < categoryOrder[b.category]) return -1;
+    if (categoryOrder[a.category] > categoryOrder[b.category]) return 1;
     if (a.name < b.name) return -1;
     if (a.name > b.name) return 1;
     return 0;
@@ -84,50 +86,61 @@ export async function getScores(): Promise<Score[]> {
   const snapshot = await getDocs(q);
   return snapshot.docs.map(docSnapshot => {
     const data = docSnapshot.data();
-    // Ensure all necessary fields are present, providing defaults if some raw scores might be missing them
     return {
       id: docSnapshot.id,
       participantId: data.participantId,
       tiempo_fisico: data.tiempo_fisico ?? 0,
       tiempo_mental: data.tiempo_mental ?? 0,
-      estado_extra: data.estado_extra ?? 'no_hecho',
-      gameTimes: data.gameTimes, // gameTimes are optional
+      extraGameStatuses: data.extraGameStatuses, // May be undefined for old scores
+      gameTimes: data.gameTimes,
       recordedAt: (data.recordedAt as Timestamp).toDate().toISOString(),
-    } as Score; // Cast, calculated fields will be added by data-utils
+    } as Score;
   });
 }
 
-// Defines the type for data being saved to Firestore for a new score
 type NewScoreFirestoreData = {
   participantId: string;
   tiempo_fisico: number;
   tiempo_mental: number;
-  estado_extra: ExtraChallengeStatus;
+  extraGameStatuses?: { [gameId: string]: ExtraChallengeStatus };
   gameTimes?: { [gameId: string]: number };
-  recordedAt: Timestamp; // Firestore expects Timestamp
+  recordedAt: Timestamp;
 };
 
+// Type for data coming from the form/app logic
+type AppScoreData = {
+  participantId: string;
+  tiempo_fisico: number;
+  tiempo_mental: number;
+  extraGameStatuses?: { [gameId: string]: ExtraChallengeStatus };
+  gameTimes?: { [gameId: string]: number };
+  recordedAt: Date; // From the app, it's a Date object
+};
+
+
 export async function addScore(
-  scoreData: Omit<Score, "id" | "recordedAt" | "puntuacion_fisica_normalizada" | "puntuacion_mental_normalizada" | "ajuste_extra_minutos" | "puntuacion_extra_normalizada" | "puntuacion_final_ponderada"> & { recordedAt: Date }
-): Promise<Score> { // Returns the Score type which includes optional calculated fields
+  scoreData: AppScoreData
+): Promise<Score> { 
   
   const dataToSave: NewScoreFirestoreData = {
     participantId: scoreData.participantId,
     tiempo_fisico: scoreData.tiempo_fisico,
     tiempo_mental: scoreData.tiempo_mental,
-    estado_extra: scoreData.estado_extra,
+    extraGameStatuses: scoreData.extraGameStatuses,
     gameTimes: scoreData.gameTimes,
     recordedAt: Timestamp.fromDate(scoreData.recordedAt),
   };
 
   const docRef = await addDoc(collection(db, SCORES_COLLECTION), dataToSave);
   
-  // Return a structure that matches the Score type,
-  // calculated fields will be undefined here as they are processed later
   return { 
     id: docRef.id, 
-    ...scoreData, // contains participantId, tiempo_fisico, tiempo_mental, estado_extra, gameTimes
-    recordedAt: scoreData.recordedAt.toISOString() // Convert Date back to ISO string for consistency in app
+    participantId: scoreData.participantId,
+    tiempo_fisico: scoreData.tiempo_fisico,
+    tiempo_mental: scoreData.tiempo_mental,
+    extraGameStatuses: scoreData.extraGameStatuses,
+    gameTimes: scoreData.gameTimes,
+    recordedAt: scoreData.recordedAt.toISOString()
   };
 }
 
@@ -142,7 +155,7 @@ export async function getRecentScores(count: number): Promise<Score[]> {
           participantId: data.participantId,
           tiempo_fisico: data.tiempo_fisico ?? 0,
           tiempo_mental: data.tiempo_mental ?? 0,
-          estado_extra: data.estado_extra ?? 'no_hecho',
+          extraGameStatuses: data.extraGameStatuses,
           gameTimes: data.gameTimes,
           recordedAt: (data.recordedAt as Timestamp).toDate().toISOString(),
         } as Score;
