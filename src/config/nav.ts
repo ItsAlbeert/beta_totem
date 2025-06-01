@@ -1,3 +1,4 @@
+
 import { Icons, type Icon } from "@/components/icons";
 
 export interface NavItem {
@@ -51,7 +52,13 @@ export const primaryNav: NavItemGroup[] = [
         title: "Trends",
         href: "/statistics/trends",
         icon: Icons.LineChart,
-        description: "Analyze participant performance over time.",
+        description: "Analyze category and game performance trends.",
+      },
+      {
+        title: "Comparisons",
+        href: "/statistics/comparisons",
+        icon: Icons.BarChart3, // Using BarChart3 for comparisons
+        description: "Compare participants and game performances.",
       },
     ],
   },
