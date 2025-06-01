@@ -11,14 +11,12 @@ import {
   Timestamp,
   orderBy,
   limit,
-  runTransaction,
-  getDoc,
   writeBatch,
   DocumentData,
   QueryDocumentSnapshot,
 } from "firebase/firestore";
 import { db } from "./firebase";
-import type { Participant, Game, Score, GameCategory } from "@/types";
+import type { Participant, Game, Score, ExtraChallengeStatus } from "@/types";
 
 // --- Helper to convert Firestore doc to actual data with ID ---
 function mapDocToDataWithId<T>(doc: QueryDocumentSnapshot<DocumentData>): T {
@@ -35,12 +33,11 @@ export async function getParticipants(): Promise<Participant[]> {
 }
 
 export async function addParticipant(participantData: Omit<Participant, "id">): Promise<Participant> {
-  const docRef = await addDoc(collection(db, PARTICIPIPANTS_COLLECTION), participantData);
+  const docRef = await addDoc(collection(db, PARTICIPANTS_COLLECTION), participantData);
   return { id: docRef.id, ...participantData };
 }
 
 export async function deleteParticipant(participantId: string): Promise<void> {
-  // Also delete associated scores
   const scoresQuery = query(collection(db, SCORES_COLLECTION), where("participantId", "==", participantId));
   const scoresSnapshot = await getDocs(scoresQuery);
   
@@ -57,19 +54,13 @@ export async function deleteParticipant(participantId: string): Promise<void> {
 const GAMES_COLLECTION = "games";
 
 export async function getGames(): Promise<Game[]> {
-  // Simplified Firestore query to order by name.
-  // Further sorting by category will be done client-side.
   const q = query(collection(db, GAMES_COLLECTION), orderBy("name"));
   const snapshot = await getDocs(q);
   const gamesList = snapshot.docs.map(doc => mapDocToDataWithId<Game>(doc));
 
-  // Client-side sorting: first by category, then by name (which was pre-sorted by Firestore).
   return gamesList.sort((a, b) => {
     if (a.category < b.category) return -1;
     if (a.category > b.category) return 1;
-    // If categories are the same, 'name' field is used for secondary sort.
-    // Since Firestore already sorted by name, this secondary sort might seem redundant,
-    // but it ensures correct order if names were identical or for full clarity.
     if (a.name < b.name) return -1;
     if (a.name > b.name) return 1;
     return 0;
@@ -93,26 +84,53 @@ export async function getScores(): Promise<Score[]> {
   const snapshot = await getDocs(q);
   return snapshot.docs.map(docSnapshot => {
     const data = docSnapshot.data();
+    // Ensure all necessary fields are present, providing defaults if some raw scores might be missing them
     return {
       id: docSnapshot.id,
-      ...data,
-      recordedAt: (data.recordedAt as Timestamp).toDate().toISOString(), // Convert Timestamp to ISO string
-    } as Score;
+      participantId: data.participantId,
+      tiempo_fisico: data.tiempo_fisico ?? 0,
+      tiempo_mental: data.tiempo_mental ?? 0,
+      estado_extra: data.estado_extra ?? 'no_hecho',
+      gameTimes: data.gameTimes, // gameTimes are optional
+      recordedAt: (data.recordedAt as Timestamp).toDate().toISOString(),
+    } as Score; // Cast, calculated fields will be added by data-utils
   });
 }
 
-export async function addScore(scoreData: Omit<Score, "id" | "recordedAt"> & { recordedAt: Date }): Promise<Score> {
-  const dataToSave = {
-    ...scoreData,
-    recordedAt: Timestamp.fromDate(scoreData.recordedAt), // Convert Date to Timestamp
+// Defines the type for data being saved to Firestore for a new score
+type NewScoreFirestoreData = {
+  participantId: string;
+  tiempo_fisico: number;
+  tiempo_mental: number;
+  estado_extra: ExtraChallengeStatus;
+  gameTimes?: { [gameId: string]: number };
+  recordedAt: Timestamp; // Firestore expects Timestamp
+};
+
+export async function addScore(
+  scoreData: Omit<Score, "id" | "recordedAt" | "puntuacion_fisica_normalizada" | "puntuacion_mental_normalizada" | "ajuste_extra_minutos" | "puntuacion_extra_normalizada" | "puntuacion_final_ponderada"> & { recordedAt: Date }
+): Promise<Score> { // Returns the Score type which includes optional calculated fields
+  
+  const dataToSave: NewScoreFirestoreData = {
+    participantId: scoreData.participantId,
+    tiempo_fisico: scoreData.tiempo_fisico,
+    tiempo_mental: scoreData.tiempo_mental,
+    estado_extra: scoreData.estado_extra,
+    gameTimes: scoreData.gameTimes,
+    recordedAt: Timestamp.fromDate(scoreData.recordedAt),
   };
+
   const docRef = await addDoc(collection(db, SCORES_COLLECTION), dataToSave);
+  
+  // Return a structure that matches the Score type,
+  // calculated fields will be undefined here as they are processed later
   return { 
     id: docRef.id, 
-    ...scoreData,
-    recordedAt: scoreData.recordedAt.toISOString() // Return with ISO string
+    ...scoreData, // contains participantId, tiempo_fisico, tiempo_mental, estado_extra, gameTimes
+    recordedAt: scoreData.recordedAt.toISOString() // Convert Date back to ISO string for consistency in app
   };
 }
+
 
 export async function getRecentScores(count: number): Promise<Score[]> {
     const q = query(collection(db, SCORES_COLLECTION), orderBy("recordedAt", "desc"), limit(count));
@@ -120,9 +138,13 @@ export async function getRecentScores(count: number): Promise<Score[]> {
     return snapshot.docs.map(docSnapshot => {
         const data = docSnapshot.data();
         return {
-        id: docSnapshot.id,
-        ...data,
-        recordedAt: (data.recordedAt as Timestamp).toDate().toISOString(),
+          id: docSnapshot.id,
+          participantId: data.participantId,
+          tiempo_fisico: data.tiempo_fisico ?? 0,
+          tiempo_mental: data.tiempo_mental ?? 0,
+          estado_extra: data.estado_extra ?? 'no_hecho',
+          gameTimes: data.gameTimes,
+          recordedAt: (data.recordedAt as Timestamp).toDate().toISOString(),
         } as Score;
     });
 }

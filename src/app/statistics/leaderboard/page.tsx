@@ -13,9 +13,17 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { getParticipants, getScores, getGames } from "@/lib/firestore-services";
-import { processLeaderboardData } from "@/lib/data-utils";
+import { calculateAllParticipantScores } from "@/lib/data-utils"; // Updated import
 
-type SortableColumn = keyof Pick<LeaderboardEntry, 'rank' | 'name' | 'year' | 'physicalTime' | 'mentalTime' | 'extraTime' | 'weightedTotalTime'>;
+type SortableColumn = keyof Pick<LeaderboardEntry, 
+  'rank' | 
+  'name' | 
+  'year' | 
+  'puntuacion_fisica_normalizada' | 
+  'puntuacion_mental_normalizada' | 
+  'puntuacion_extra_normalizada' | 
+  'puntuacion_final_ponderada'
+>;
 type SortDirection = 'asc' | 'desc';
 
 export default function LeaderboardPage() {
@@ -23,53 +31,77 @@ export default function LeaderboardPage() {
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [expandedParticipantId, setExpandedParticipantId] = useState<string | null>(null);
 
-  const { data: participants = [], isLoading: isLoadingParticipants } = useQuery<Participant[]>({
+  const { data: participants = [], isLoading: isLoadingParticipants, error: errorParticipants } = useQuery<Participant[]>({
     queryKey: ["participants"],
     queryFn: getParticipants,
   });
 
-  const { data: scores = [], isLoading: isLoadingScores } = useQuery<Score[]>({
-    queryKey: ["scores"],
+  const { data: allScores = [], isLoading: isLoadingScores, error: errorScores } = useQuery<Score[]>({
+    queryKey: ["scores"], // Fetch all scores for global min/max calculation
     queryFn: getScores,
   });
   
-  const { data: games = [], isLoading: isLoadingGames } = useQuery<Game[]>({
+  const { data: games = [], isLoading: isLoadingGames, error: errorGames } = useQuery<Game[]>({
     queryKey: ["games"],
     queryFn: getGames,
   });
 
   const isLoadingOverall = isLoadingParticipants || isLoadingScores || isLoadingGames;
+  const overallError = errorParticipants || errorScores || errorGames;
 
   const applySort = useCallback((data: LeaderboardEntry[], column: SortableColumn, direction: SortDirection) => {
     if(data.length === 0) return data;
+    
+    // For 'rank', higher SF means lower rank number, so default 'asc' for rank means 'desc' for SF
+    // The new system ranks by SF (higher is better)
+    const isRankOrSF = column === 'rank' || column === 'puntuacion_final_ponderada';
     
     return [...data].sort((a, b) => {
       let valA = a[column];
       let valB = b[column];
 
-      if (typeof valA === 'string' && typeof valB === 'string') {
-        return direction === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+      if (column === 'name') { // Name sorting is lexical
+        return direction === 'asc' ? (valA as string).localeCompare(valB as string) : (valB as string).localeCompare(valA as string);
       }
+      
+      // For numeric scores, null/undefined might occur if a score component isn't applicable.
+      // Treat missing scores as worst for asc (Infinity) or desc (-Infinity)
       valA = (valA === undefined || valA === null ? (direction === 'asc' ? Infinity : -Infinity) : valA) as number;
       valB = (valB === undefined || valB === null ? (direction === 'asc' ? Infinity : -Infinity) : valB) as number;
       
+      // Rank sorting should align with SF (higher SF is better/lower rank number)
+      // If sorting by rank itself, use the rank number.
+      // If sorting by SF, higher is better.
+      if (column === 'rank') {
+        return direction === 'asc' ? (valA as number) - (valB as number) : (valB as number) - (valA as number);
+      }
+      // For other scores, higher is generally better.
       return direction === 'asc' ? (valA as number) - (valB as number) : (valB as number) - (valA as number);
     });
   }, []);
   
   const leaderboardData = useMemo(() => {
-    if (isLoadingOverall || !participants.length || !scores.length) return [];
-    const processed = processLeaderboardData(participants, scores);
+    if (isLoadingOverall || overallError || !participants.length || !allScores.length) return [];
+    // Calculate scores using the new system
+    const processed = calculateAllParticipantScores(participants, allScores);
+    // Apply client-side sorting if needed (already sorted by SF in calculateAllParticipantScores)
     return applySort(processed, sortColumn, sortDirection);
-  }, [participants, scores, isLoadingOverall, sortColumn, sortDirection, applySort]);
+  }, [participants, allScores, isLoadingOverall, overallError, sortColumn, sortDirection, applySort]);
 
 
   const handleSort = (column: SortableColumn) => {
-    let direction = sortDirection;
-    if (sortColumn === column) {
+    let direction: SortDirection = sortDirection;
+     if (sortColumn === column) {
       direction = sortDirection === 'asc' ? 'desc' : 'asc';
     } else {
-      direction = 'asc';
+      // Default sort for scores is descending (higher is better)
+      // Default sort for rank is ascending (1 is better)
+      // Default sort for name/year is ascending
+      if (column.startsWith('puntuacion_')) {
+        direction = 'desc';
+      } else {
+        direction = 'asc';
+      }
     }
     setSortColumn(column);
     setSortDirection(direction);
@@ -87,17 +119,21 @@ export default function LeaderboardPage() {
     </Button>
   );
 
+  if (overallError) {
+    return <p className="text-destructive text-center py-8">Error loading data: {(overallError as Error).message}</p>;
+  }
+
   return (
     <>
       <PageHeader
         title="Leaderboard"
-        description="Overall participant rankings based on weighted total time. Click rows for game details."
+        description="Overall participant rankings based on final weighted score (SF). Higher is better. Click rows for game details."
       />
       <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
         <CardHeader>
           <CardTitle>Current Standings</CardTitle>
           <CardDescription>
-            Participants are ranked by their weighted total time (lower is better).
+            Participants are ranked by their Puntuación Final (SF). Higher scores are better.
             Click column headers to sort or participant rows to see game time breakdowns.
           </CardDescription>
         </CardHeader>
@@ -125,16 +161,16 @@ export default function LeaderboardPage() {
                     <SortableButton column="year">Year</SortableButton>
                   </TableHead>
                   <TableHead className="text-right">
-                    <SortableButton column="physicalTime">Physical</SortableButton>
+                    <SortableButton column="puntuacion_fisica_normalizada">S_Physical</SortableButton>
                   </TableHead>
                   <TableHead className="text-right">
-                    <SortableButton column="mentalTime">Mental</SortableButton>
+                    <SortableButton column="puntuacion_mental_normalizada">S_Mental</SortableButton>
                   </TableHead>
                   <TableHead className="text-right">
-                    <SortableButton column="extraTime">Bonus</SortableButton>
+                    <SortableButton column="puntuacion_extra_normalizada">S_Extra</SortableButton>
                   </TableHead>
                   <TableHead className="text-right">
-                    <SortableButton column="weightedTotalTime">Total Weighted</SortableButton>
+                    <SortableButton column="puntuacion_final_ponderada">Score Final (SF)</SortableButton>
                   </TableHead>
                 </TableRow>
               </TableHeader>
@@ -157,42 +193,53 @@ export default function LeaderboardPage() {
                       </TableCell>
                       <TableCell className="font-medium">{entry.name}</TableCell>
                       <TableCell>{entry.year}</TableCell>
-                      <TableCell className="text-right">{entry.physicalTime.toFixed(2)} min</TableCell>
-                      <TableCell className="text-right">{entry.mentalTime.toFixed(2)} min</TableCell>
-                      <TableCell className="text-right">{(entry.extraTime || 0).toFixed(2)} min</TableCell>
-                      <TableCell className="text-right font-semibold">{entry.weightedTotalTime.toFixed(2)} min</TableCell>
+                      <TableCell className="text-right">{entry.puntuacion_fisica_normalizada.toFixed(1)}</TableCell>
+                      <TableCell className="text-right">{entry.puntuacion_mental_normalizada.toFixed(1)}</TableCell>
+                      <TableCell className="text-right">{entry.puntuacion_extra_normalizada.toFixed(1)}</TableCell>
+                      <TableCell className="text-right font-semibold">{entry.puntuacion_final_ponderada.toFixed(1)}</TableCell>
                     </TableRow>
                     {expandedParticipantId === entry.id && (
                       <TableRow className="bg-muted/10 hover:bg-muted/20 transition-colors">
                         <TableCell colSpan={9} className="p-0">
                           <div className="p-4 pl-[70px] border-l-4 border-primary/30"> 
-                            <h4 className="text-md font-semibold mb-2">Game Breakdown (Latest Score on {new Date(entry.scoreRecordedAt).toLocaleDateString()}):</h4>
-                            {(['Physical', 'Mental', 'Extra'] as GameCategory[]).map(category => {
-                              const categoryGames = Object.entries(entry.gameTimes || {})
-                                .map(([gameId, time]) => {
-                                  const gameDetails = games.find(g => g.id === gameId);
-                                  if (gameDetails && gameDetails.category === category && typeof time === 'number') {
-                                    return { name: gameDetails.name, time };
-                                  }
-                                  return null;
-                                })
-                                .filter(Boolean) as { name: string; time: number }[];
+                            <h4 className="text-md font-semibold mb-2">Breakdown (Latest Score on {new Date(entry.scoreRecordedAt).toLocaleDateString()}):</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                                <p>Raw Physical Time: <span className="font-medium">{entry.latest_tiempo_fisico.toFixed(2)} min</span></p>
+                                <p>Raw Mental Time: <span className="font-medium">{entry.latest_tiempo_mental.toFixed(2)} min</span></p>
+                                <p>Extra Status: <span className="font-medium">{entry.latest_estado_extra.replace('_', ' ')}</span></p>
+                                <p>Extra Adjustment: <span className="font-medium">{entry.ajuste_extra_minutos.toFixed(1)} min</span></p>
+                            </div>
+                            {entry.gameTimes && Object.keys(entry.gameTimes).length > 0 && games.length > 0 && (
+                                <div className="mt-3">
+                                <h5 className="text-sm font-medium text-primary mb-1">Individual Game Times (logged):</h5>
+                                {(['Physical', 'Mental', 'Extra'] as GameCategory[]).map(category => {
+                                  const categoryGames = Object.entries(entry.gameTimes || {})
+                                    .map(([gameId, time]) => {
+                                      const gameDetails = games.find(g => g.id === gameId);
+                                      if (gameDetails && gameDetails.category === category && typeof time === 'number') {
+                                        return { name: gameDetails.name, time };
+                                      }
+                                      return null;
+                                    })
+                                    .filter(Boolean) as { name: string; time: number }[];
 
-                              if (categoryGames.length === 0) return null;
+                                  if (categoryGames.length === 0) return null;
 
-                              return (
-                                <div key={category} className="mb-3">
-                                  <h5 className="text-sm font-medium text-primary mb-1">{category} Games:</h5>
-                                  <ul className="list-disc pl-6 space-y-0.5 text-sm text-foreground/80">
-                                    {categoryGames.map(game => (
-                                      <li key={game.name}>{game.name}: {game.time.toFixed(2)} min</li>
-                                    ))}
-                                  </ul>
+                                  return (
+                                    <div key={category} className="mb-2">
+                                      <h6 className="text-xs font-semibold text-muted-foreground mb-0.5">{category} Games:</h6>
+                                      <ul className="list-disc pl-5 space-y-0.5 text-sm text-foreground/80">
+                                        {categoryGames.map(game => (
+                                          <li key={game.name}>{game.name}: {game.time.toFixed(2)} min</li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  );
+                                })}
                                 </div>
-                              );
-                            })}
+                            )}
                             {(!entry.gameTimes || Object.keys(entry.gameTimes).length === 0) && (
-                                <p className="text-sm text-muted-foreground">No specific game times recorded for this score entry.</p>
+                                <p className="text-sm text-muted-foreground mt-2">No specific game times were logged for this score entry.</p>
                             )}
                           </div>
                         </TableCell>
@@ -203,8 +250,8 @@ export default function LeaderboardPage() {
               </TableBody>
             </Table>
           )}
-          {leaderboardData.length === 0 && !isLoadingOverall && (
-            <p className="text-center text-muted-foreground py-8">No leaderboard data available. Add participants and record their times.</p>
+          {leaderboardData.length === 0 && !isLoadingOverall && !overallError && (
+            <p className="text-center text-muted-foreground py-8">No leaderboard data available. Add participants and record their scores.</p>
           )}
         </CardContent>
       </Card>

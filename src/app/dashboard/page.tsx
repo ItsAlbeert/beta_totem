@@ -12,14 +12,14 @@ import { Icons } from "@/components/icons";
 import { formatDistanceToNowStrict } from 'date-fns';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { getParticipants, getGames, getScores, getRecentScores } from "@/lib/firestore-services";
-import { processLeaderboardData } from "@/lib/data-utils";
+import { calculateAllParticipantScores } from "@/lib/data-utils"; // Updated import
 
 interface DashboardData {
   totalParticipants: number;
   totalGames: number;
-  averageWeightedTime: number | null;
-  topPerformers: LeaderboardEntry[];
-  recentScoresData: (Score & { participantName?: string })[];
+  averageFinalScore: number | null; // Changed from averageWeightedTime
+  topPerformers: LeaderboardEntry[]; // LeaderboardEntry now uses the new scoring system
+  recentScoresData: (Score & { participantName?: string, finalScoreDisplay?: string })[]; // Added finalScoreDisplay
   totalScoresLogged: number;
 }
 
@@ -32,61 +32,72 @@ export default function DashboardPage() {
     return () => clearInterval(timerId);
   }, []);
 
-  const { data: participants = [], isLoading: isLoadingParticipants } = useQuery<Participant[]>({
+  const { data: participants = [], isLoading: isLoadingParticipants, error: errorParticipants } = useQuery<Participant[]>({
     queryKey: ["participants"],
     queryFn: getParticipants,
   });
 
-  const { data: games = [], isLoading: isLoadingGames } = useQuery<Game[]>({
+  const { data: games = [], isLoading: isLoadingGames, error: errorGames } = useQuery<Game[]>({
     queryKey: ["games"],
     queryFn: getGames,
   });
 
-  const { data: scores = [], isLoading: isLoadingScores } = useQuery<Score[]>({
+  const { data: allScores = [], isLoading: isLoadingScores, error: errorScores } = useQuery<Score[]>({
     queryKey: ["scores"],
-    queryFn: getScores, // Fetches all scores, could be optimized if only aggregates needed
+    queryFn: getScores,
   });
   
-  const { data: recentScoresRaw = [], isLoading: isLoadingRecentScores } = useQuery<Score[]>({
-    queryKey: ["recentScores"],
+  const { data: recentScoresRaw = [], isLoading: isLoadingRecentScores, error: errorRecentScores } = useQuery<Score[]>({
+    queryKey: ["recentScores"], // This will fetch raw scores
     queryFn: () => getRecentScores(5),
   });
 
+  const isLoadingOverall = isLoadingParticipants || isLoadingGames || isLoadingScores || isLoadingRecentScores;
+  const overallError = errorParticipants || errorGames || errorScores || errorRecentScores;
+
 
   const dashboardData = useMemo((): DashboardData | null => {
-    if (isLoadingParticipants || isLoadingGames || isLoadingScores || isLoadingRecentScores) {
+    if (isLoadingOverall || overallError || !participants.length) { // Check for participants presence
       return null; 
     }
 
     const participantsMap = new Map(participants.map(p => [p.id, p.name]));
     const totalParticipants = participants.length;
     const totalGames = games.length;
-    const totalScoresLogged = scores.length;
+    const totalScoresLogged = allScores.length;
 
-    const leaderboard = processLeaderboardData(participants, scores);
-    const topPerformers = leaderboard.slice(0, 3);
+    let topPerformers: LeaderboardEntry[] = [];
+    let averageFinalScore: number | null = null;
 
-    const latestScoresTimes = leaderboard.map(entry => entry.weightedTotalTime);
-    const averageWeightedTime = latestScoresTimes.length > 0 
-      ? latestScoresTimes.reduce((sum, time) => sum + time, 0) / latestScoresTimes.length 
-      : null;
+    if (allScores.length > 0 && participants.length > 0) {
+        const leaderboard = calculateAllParticipantScores(participants, allScores);
+        topPerformers = leaderboard.slice(0, 3);
+
+        const finalScoresList = leaderboard.map(entry => entry.puntuacion_final_ponderada);
+        averageFinalScore = finalScoresList.length > 0 
+        ? finalScoresList.reduce((sum, score) => sum + score, 0) / finalScoresList.length 
+        : null;
+    }
       
+    // For recent scores, we can display the raw times or a placeholder if SF isn't calculated for them individually here
     const recentScoresData = recentScoresRaw.map(score => ({
         ...score,
         participantName: participantsMap.get(score.participantId) || "Unknown",
+        // SF is calculated globally, so for recent raw scores, we might not have it easily
+        // We can show raw times or a note.
+        finalScoreDisplay: `T_F: ${score.tiempo_fisico.toFixed(1)}, T_M: ${score.tiempo_mental.toFixed(1)}, Extra: ${score.estado_extra.replace('_', ' ')}`
     }));
+
 
     return {
       totalParticipants,
       totalGames,
-      averageWeightedTime,
+      averageFinalScore,
       topPerformers,
       recentScoresData,
       totalScoresLogged,
     };
-  }, [participants, games, scores, recentScoresRaw, isLoadingParticipants, isLoadingGames, isLoadingScores, isLoadingRecentScores]);
-
-  const isLoadingOverall = isLoadingParticipants || isLoadingGames || isLoadingScores || isLoadingRecentScores;
+  }, [participants, games, allScores, recentScoresRaw, isLoadingOverall, overallError]);
 
 
   const StatCard = ({ title, value, icon: Icon, description, isLoading }: { title: string; value: string | number | null; icon: Icons.Icon; description?: string, isLoading?: boolean }) => (
@@ -111,6 +122,10 @@ export default function DashboardPage() {
     </Card>
   );
 
+  if (overallError) {
+    return <p className="text-destructive text-center py-8">Error loading dashboard data: {(overallError as Error).message}</p>;
+  }
+
   return (
     <>
       <PageHeader
@@ -134,17 +149,17 @@ export default function DashboardPage() {
           isLoading={isLoadingOverall}
         />
         <StatCard 
-          title="Average Weighted Time" 
-          value={dashboardData?.averageWeightedTime !== null && dashboardData?.averageWeightedTime !== undefined ? `${dashboardData.averageWeightedTime.toFixed(2)} min` : 'N/A'} 
+          title="Average Final Score (SF)" 
+          value={dashboardData?.averageFinalScore !== null && dashboardData?.averageFinalScore !== undefined ? `${dashboardData.averageFinalScore.toFixed(1)} pts` : 'N/A'} 
           icon={Icons.Sigma}
-          description="Avg. of latest weighted scores."
+          description="Avg. of final weighted scores (SF)."
           isLoading={isLoadingOverall}
         />
         <StatCard 
           title="Scores Logged" 
           value={dashboardData?.totalScoresLogged ?? 0} 
           icon={Icons.Activity}
-          description="Total scores recorded so far."
+          description="Total raw scores recorded so far."
           isLoading={isLoadingOverall}
         />
       </div>
@@ -155,10 +170,10 @@ export default function DashboardPage() {
             <CardTitle className="flex items-center">
               <Icons.Award className="mr-2 h-6 w-6 text-yellow-500" /> Top Performers
             </CardTitle>
-            <CardDescription>Top 3 participants by latest weighted total time.</CardDescription>
+            <CardDescription>Top 3 participants by Final Score (SF). Higher is better.</CardDescription>
           </CardHeader>
           <CardContent>
-            {isLoadingOverall ? (
+            {isLoadingOverall && !dashboardData ? (
               <div className="space-y-4">
                 {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
               </div>
@@ -175,13 +190,13 @@ export default function DashboardPage() {
                     </Avatar>
                     <div className="flex-1">
                       <p className="font-medium text-foreground">{performer.name}</p>
-                      <p className="text-sm text-muted-foreground">Weighted Time: {performer.weightedTotalTime.toFixed(2)} min</p>
+                      <p className="text-sm text-muted-foreground">Score Final (SF): {performer.puntuacion_final_ponderada.toFixed(1)} pts</p>
                     </div>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="text-center text-muted-foreground py-4">No performance data yet.</p>
+              <p className="text-center text-muted-foreground py-4">No performance data yet. Add scores to see rankings.</p>
             )}
           </CardContent>
         </Card>
@@ -191,10 +206,10 @@ export default function DashboardPage() {
             <CardTitle className="flex items-center">
               <Icons.CalendarClock className="mr-2 h-6 w-6 text-blue-500" /> Recent Activity
             </CardTitle>
-            <CardDescription>Last 5 scores recorded.</CardDescription>
+            <CardDescription>Last 5 raw scores recorded.</CardDescription>
           </CardHeader>
           <CardContent>
-            {isLoadingOverall ? (
+            {isLoadingOverall && !dashboardData ? (
                <div className="space-y-3">
                 {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
               </div>
@@ -208,7 +223,7 @@ export default function DashboardPage() {
                           {score.participantName}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          Score: {score.weightedTotalTime.toFixed(2)} min
+                         {score.finalScoreDisplay}
                         </p>
                       </div>
                       <p className="text-xs text-muted-foreground">

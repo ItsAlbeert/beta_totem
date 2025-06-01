@@ -10,11 +10,12 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart";
-import type { ChartConfig, Participant, Score, Game, GameCategory, SingleMetricDataPoint } from "@/types";
+import type { ChartConfig, Participant, Score, Game, GameCategory, SingleMetricDataPoint, LeaderboardEntry } from "@/types";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { getParticipants, getScores, getGames } from "@/lib/firestore-services";
+import { calculateAllParticipantScores } from "@/lib/data-utils"; // For SF scores
 
 const chartColors = [
   "hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))",
@@ -25,99 +26,100 @@ const getColor = (index: number) => chartColors[index % chartColors.length];
 
 interface ProcessedPageData {
   participants: Participant[];
-  scores: Score[];
+  allScores: Score[]; // All raw scores
   games: Game[];
-  latestScoresMap: Map<string, Score>;
+  leaderboardForLatestScores: LeaderboardEntry[]; // Processed scores (S_p, S_m, SF etc.) for latest entry of each participant
   participantsMap: Map<string, Participant>;
   gamesMap: Map<string, Game>;
 }
 
 export default function TrendsPage() {
-  const { data: participants = [], isLoading: isLoadingParticipants } = useQuery<Participant[]>({
+  const { data: participants = [], isLoading: isLoadingParticipants, error: errorParticipants } = useQuery<Participant[]>({
     queryKey: ["participants"],
     queryFn: getParticipants,
   });
 
-  const { data: scores = [], isLoading: isLoadingScores } = useQuery<Score[]>({
+  const { data: allScores = [], isLoading: isLoadingScores, error: errorScores } = useQuery<Score[]>({
     queryKey: ["scores"],
     queryFn: getScores,
   });
 
-  const { data: games = [], isLoading: isLoadingGames } = useQuery<Game[]>({
+  const { data: games = [], isLoading: isLoadingGames, error: errorGames } = useQuery<Game[]>({
     queryKey: ["games"],
     queryFn: getGames,
   });
 
   const isLoadingOverall = isLoadingParticipants || isLoadingScores || isLoadingGames;
+  const overallError = errorParticipants || errorScores || errorGames;
 
   const processedData = useMemo((): ProcessedPageData | null => {
-    if (isLoadingOverall) return null;
+    if (isLoadingOverall || overallError) return null;
 
     const participantsMap = new Map(participants.map(p => [p.id, p]));
     const gamesMap = new Map(games.map(g => [g.id, g]));
-
-    const latestScoresMap = new Map<string, Score>();
-    scores.forEach(score => {
-      const existing = latestScoresMap.get(score.participantId);
-      if (!existing || new Date(score.recordedAt).getTime() > new Date(existing.recordedAt).getTime()) {
-        latestScoresMap.set(score.participantId, score);
-      }
-    });
-    return { participants, scores, games, latestScoresMap, participantsMap, gamesMap };
-  }, [participants, scores, games, isLoadingOverall]);
-
-
-  const categoryTotalTimeChartData = useMemo(() => {
-    if (!processedData) return { Physical: [], Mental: [], Extra: [] };
-    const { participants, latestScoresMap, participantsMap } = processedData;
     
-    const result: { [key in GameCategory]: SingleMetricDataPoint[] } = { Physical: [], Mental: [], Extra: [] };
+    // Calculate SF etc. for the latest score of each participant
+    const leaderboardForLatestScores = calculateAllParticipantScores(participants, allScores);
 
-    (['Physical', 'Mental', 'Extra'] as GameCategory[]).forEach(category => {
-      participants.forEach(p => {
-        const latestScore = latestScoresMap.get(p.id);
-        if (latestScore) {
-          let scoreValue: number | null = null;
-          if (category === 'Physical') scoreValue = latestScore.physicalTime;
-          else if (category === 'Mental') scoreValue = latestScore.mentalTime;
-          else if (category === 'Extra' && latestScore.extraTime !== undefined) scoreValue = latestScore.extraTime;
-          
-          if (scoreValue !== null && scoreValue !== undefined) { 
-             result[category].push({ name: participantsMap.get(p.id)?.name || p.id, score: scoreValue });
-          }
-        }
-      });
-       result[category].sort((a, b) => (a.score ?? Infinity) - (b.score ?? Infinity)); 
+    return { participants, allScores, games, leaderboardForLatestScores, participantsMap, gamesMap };
+  }, [participants, allScores, games, isLoadingOverall, overallError]);
+
+
+  // Chart for S_p, S_m, S_e (Normalized scores for categories)
+  const categoryNormalizedScoreChartData = useMemo(() => {
+    if (!processedData) return { Physical: [], Mental: [], Extra: [] };
+    const { leaderboardForLatestScores, participantsMap } = processedData;
+    
+    const result: { [key in GameCategory | string]: SingleMetricDataPoint[] } = { Physical: [], Mental: [], Extra: [] };
+
+    leaderboardForLatestScores.forEach(entry => {
+      const participantName = participantsMap.get(entry.id)?.name || entry.id;
+      result.Physical.push({ name: participantName, score: entry.puntuacion_fisica_normalizada });
+      result.Mental.push({ name: participantName, score: entry.puntuacion_mental_normalizada });
+      result.Extra.push({ name: participantName, score: entry.puntuacion_extra_normalizada });
+    });
+
+    Object.keys(result).forEach(cat => {
+        (result[cat as GameCategory] as SingleMetricDataPoint[]).sort((a, b) => (b.score ?? -Infinity) - (a.score ?? -Infinity)); // Higher score is better
     });
     return result;
   }, [processedData]);
 
-
+  // Chart for individual game raw times (from latest score)
   const individualGameChartData = useMemo(() => {
     if (!processedData) return {};
-    const { participants, games, latestScoresMap, participantsMap } = processedData;
+    const { games, leaderboardForLatestScores, participantsMap } = processedData;
     const result: { [gameId: string]: SingleMetricDataPoint[] } = {};
 
     games.forEach(game => {
       result[game.id] = [];
-      participants.forEach(p => {
-        const latestScore = latestScoresMap.get(p.id);
-        const gameTime = latestScore?.gameTimes?.[game.id];
+      leaderboardForLatestScores.forEach(entry => {
+        const gameTime = entry.gameTimes?.[game.id];
         if (gameTime !== undefined && gameTime !== null) { 
-          result[game.id].push({ name: participantsMap.get(p.id)?.name || p.id, score: gameTime });
+          result[game.id].push({ name: participantsMap.get(entry.id)?.name || entry.id, score: gameTime });
         }
       });
-      result[game.id].sort((a, b) => (a.score ?? Infinity) - (b.score ?? Infinity)); 
+      result[game.id].sort((a, b) => (a.score ?? Infinity) - (b.score ?? Infinity)); // Lower time is better for raw game times
     });
     return result;
   }, [processedData]);
 
-  const renderBarChart = (title: string, description: string, data: SingleMetricDataPoint[], dataKey: string = "score", yAxisLabel: string = "Time (min)", chartKeySuffix: string, mainChart: boolean = false) => {
+
+  const renderBarChart = (
+    title: string, 
+    description: string, 
+    data: SingleMetricDataPoint[], 
+    dataKey: string = "score", 
+    yAxisLabel: string = "Score (pts)", 
+    chartKeySuffix: string, 
+    mainChart: boolean = false,
+    lowerIsBetter: boolean = false // For raw times
+  ) => {
     const chartUniqueKey = `chart-${chartKeySuffix}-${mainChart ? 'main' : 'sub'}`;
-    if (isLoadingOverall && data.length === 0) return <Skeleton className={cn(mainChart ? "h-[400px]" : "h-[300px]", "w-full shadow-lg")} key={`${chartUniqueKey}-skeleton`} />;
+    if (isLoadingOverall && !processedData && data.length === 0) return <Skeleton className={cn(mainChart ? "h-[400px]" : "h-[300px]", "w-full shadow-lg")} key={`${chartUniqueKey}-skeleton`} />;
     if (!isLoadingOverall && data.length === 0) return <p className="text-center text-muted-foreground py-4 col-span-full" key={`${chartUniqueKey}-nodata`}>No data available for this chart.</p>;
     
-    const config: ChartConfig = { [dataKey]: { label: yAxisLabel, color: getColor(mainChart ? 0 : Math.floor(Math.random() * 5)) } };
+    const config: ChartConfig = { [dataKey]: { label: yAxisLabel, color: getColor(mainChart ? 0 : Math.floor(Math.random() * 5) + 1) } };
 
     return (
       <Card className={cn("shadow-lg hover:shadow-xl transition-shadow duration-300", !mainChart && "sm:col-span-1")} key={chartUniqueKey}>
@@ -130,7 +132,7 @@ export default function TrendsPage() {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data} layout="vertical" margin={{ left: 20, right: 30, top:5, bottom: 20 }}>
                 <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis type="number" stroke="hsl(var(--muted-foreground))" label={{ value: yAxisLabel, position: 'insideBottom', offset: -10, fill: 'hsl(var(--muted-foreground))' }} />
+                <XAxis type="number" stroke="hsl(var(--muted-foreground))" label={{ value: yAxisLabel, position: 'insideBottom', offset: -10, fill: 'hsl(var(--muted-foreground))' }} domain={lowerIsBetter ? ['dataMin', 'auto'] : [0, 'auto']} />
                 <YAxis 
                   dataKey="name" 
                   type="category" 
@@ -150,27 +152,29 @@ export default function TrendsPage() {
     );
   };
   
-  const renderCategorySection = (category: GameCategory, title: string) => {
+  const renderCategorySection = (category: GameCategory, titleSuffix: string, scoreField: 'puntuacion_fisica_normalizada' | 'puntuacion_mental_normalizada' | 'puntuacion_extra_normalizada') => {
     if (isLoadingOverall && !processedData) return <Skeleton className="h-[600px] w-full mb-8 shadow-lg" key={`skeleton-cat-${category}`} />;
     
     const categoryGames = processedData?.games.filter(g => g.category === category) || [];
-    const categoryTotalData = categoryTotalTimeChartData[category] || [];
+    // Use categoryNormalizedScoreChartData for the main category chart
+    const categoryTotalData = categoryNormalizedScoreChartData[category] || [];
     
     return (
       <div className="mb-12" key={`category-section-${category}`}>
-        <h2 className="text-3xl font-semibold mb-6 border-b pb-3 text-foreground">{title} Performance</h2>
+        <h2 className="text-3xl font-semibold mb-6 border-b pb-3 text-foreground">{titleSuffix} Performance (Normalized Scores)</h2>
         {renderBarChart(
-          `Overall ${category} Performance`, 
-          `Total ${category.toLowerCase()} time for all participants (latest scores). Lower is better.`,
+          `Overall ${category} Normalized Score (S_${category.substring(0,1).toLowerCase()})`, 
+          `Normalized ${category.toLowerCase()} score (0-100) for all participants (latest scores). Higher is better.`,
           categoryTotalData,
           "score",
-          `${category} Time (min)`,
-          `total-${category.toLowerCase()}`,
-          true
+          `${category} Score (pts)`,
+          `total-norm-${category.toLowerCase()}`,
+          true,
+          false // Higher is better for normalized scores
         )}
         {categoryGames.length > 0 && (
           <>
-            <h3 className="text-2xl font-medium mt-10 mb-6 text-foreground/90">Individual {category} Games</h3>
+            <h3 className="text-2xl font-medium mt-10 mb-6 text-foreground/90">Individual {category} Games (Raw Times)</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {categoryGames.map(game => (
                 <div key={game.id}>
@@ -179,41 +183,45 @@ export default function TrendsPage() {
                   "", 
                   individualGameChartData[game.id] || [],
                   "score",
-                  "Time (min)",
+                  "Time (min)", // Raw time
                   `game-${game.id}`,
-                  false
+                  false,
+                  true // Lower is better for raw times
                 )}
                 </div>
               ))}
             </div>
           </>
         )}
-         {categoryGames.length === 0 && !isLoadingOverall && ( 
+         {categoryGames.length === 0 && !isLoadingOverall && !overallError && ( 
              <p className="text-center text-muted-foreground py-4 mt-6">No {category.toLowerCase()} games defined for this category.</p>
         )}
       </div>
     );
   };
 
+  if (overallError) {
+    return <p className="text-destructive text-center py-8">Error loading trends data: {(overallError as Error).message}</p>;
+  }
 
   return (
     <>
       <PageHeader
         title="Performance Trends"
-        description="Analyze overall category performance and individual game scores based on latest results."
+        description="Analyze overall category normalized scores and individual game raw times based on latest results."
       />
       <div className="space-y-10">
         {isLoadingOverall && !processedData ? (
           <>
-            <Skeleton className="h-[600px] w-full mb-8 shadow-lg" key="skeleton-physical" />
-            <Skeleton className="h-[600px] w-full mb-8 shadow-lg" key="skeleton-mental" />
-            <Skeleton className="h-[600px] w-full shadow-lg" key="skeleton-extra" />
+            <Skeleton className="h-[600px] w-full mb-8 shadow-lg" key="skeleton-physical-norm" />
+            <Skeleton className="h-[600px] w-full mb-8 shadow-lg" key="skeleton-mental-norm" />
+            <Skeleton className="h-[600px] w-full shadow-lg" key="skeleton-extra-norm" />
           </>
         ) : (
           <>
-            {renderCategorySection('Physical', 'Physical Challenge')}
-            {renderCategorySection('Mental', 'Mental Challenge')}
-            {renderCategorySection('Extra', 'Extra Bonus')}
+            {renderCategorySection('Physical', 'Physical Challenge', 'puntuacion_fisica_normalizada')}
+            {renderCategorySection('Mental', 'Mental Challenge', 'puntuacion_mental_normalizada')}
+            {renderCategorySection('Extra', 'Extra Bonus', 'puntuacion_extra_normalizada')}
           </>
         )}
       </div>

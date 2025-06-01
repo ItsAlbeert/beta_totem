@@ -25,23 +25,22 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 import { useToast } from "@/hooks/use-toast";
-import type { Participant, Score, Game, GameCategory } from "@/types";
+import type { Participant, Score, Game, GameCategory, ExtraChallengeStatus } from "@/types";
 import { Separator } from "@/components/ui/separator";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getParticipants, getGames, addScore } from "@/lib/firestore-services";
 
 const timeInputSchema = z.object({
   participantId: z.string().min(1, "Participant selection is required."),
-  physicalTime: z.coerce
+  tiempo_fisico: z.coerce
     .number({ invalid_type_error: "Physical time must be a number." })
     .min(0, "Physical time cannot be negative."),
-  mentalTime: z.coerce
+  tiempo_mental: z.coerce
     .number({ invalid_type_error: "Mental time must be a number." })
     .min(0, "Mental time cannot be negative."),
-  extraTime: z.coerce
-    .number({ invalid_type_error: "Extra time must be a number." })
-    .min(0, "Extra time cannot be negative.")
-    .optional(),
+  estado_extra: z.enum(['no_hecho', 'hecho_a_medias', 'hecho'], {
+    required_error: "Extra challenge status is required.",
+  }),
   gameTimes: z.record(z.string(), z.coerce.number().min(0, "Game time cannot be negative.").optional()).optional(),
 });
 
@@ -65,9 +64,9 @@ export default function TimesPage() {
     resolver: zodResolver(timeInputSchema),
     defaultValues: {
       participantId: "",
-      physicalTime: 0,
-      mentalTime: 0,
-      extraTime: 0,
+      tiempo_fisico: 0,
+      tiempo_mental: 0,
+      estado_extra: "no_hecho",
       gameTimes: {},
     },
   });
@@ -75,30 +74,30 @@ export default function TimesPage() {
   const addScoreMutation = useMutation({
     mutationFn: addScore,
     onSuccess: (newScore) => {
+      // Invalidate queries that depend on scores to refetch and recalculate
       queryClient.invalidateQueries({ queryKey: ["scores"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboardData"] }); // If dashboard uses scores
+      queryClient.invalidateQueries({ queryKey: ["dashboardData"] }); 
       queryClient.invalidateQueries({ queryKey: ["leaderboardData"] });
       queryClient.invalidateQueries({ queryKey: ["trendsData"] });
       queryClient.invalidateQueries({ queryKey: ["comparisonsData"] });
 
-
       const participantName = participants.find(p => p.id === newScore.participantId)?.name || "Participant";
       toast({
-        title: "Time Recorded Successfully!",
-        description: `Times for ${participantName} have been saved. Weighted total: ${newScore.weightedTotalTime.toFixed(2)} min.`,
+        title: "Score Recorded Successfully!",
+        description: `Raw times for ${participantName} have been saved. Final scores will be calculated globally.`,
         variant: "default",
       });
       form.reset({ 
         participantId: "",
-        physicalTime: 0,
-        mentalTime: 0,
-        extraTime: 0,
+        tiempo_fisico: 0,
+        tiempo_mental: 0,
+        estado_extra: "no_hecho",
         gameTimes: {},
       });
     },
     onError: (error) => {
       toast({
-        title: "Error recording time",
+        title: "Error recording score",
         description: error.message,
         variant: "destructive",
       });
@@ -117,24 +116,18 @@ export default function TimesPage() {
       return;
     }
 
-    const physicalTime = values.physicalTime;
-    const mentalTime = values.mentalTime;
-    const extraTime = values.extraTime || 0;
-    const gameSpecificTimes = values.gameTimes || {};
-
-    const weightedTotalTime = physicalTime + (mentalTime * 3) - extraTime;
-
-    const newScoreData: Omit<Score, "id" | "recordedAt"> & { recordedAt: Date } = {
+    // Prepare the raw score data as per the new system
+    // The actual S_p, S_m, S_e, SF calculations will happen in data-utils, based on global min/max times
+    const newScoreData: Omit<Score, "id" | "recordedAt" | "puntuacion_fisica_normalizada" | "puntuacion_mental_normalizada" | "ajuste_extra_minutos" | "puntuacion_extra_normalizada" | "puntuacion_final_ponderada"> & { recordedAt: Date } = {
       participantId: values.participantId,
-      physicalTime: physicalTime,
-      mentalTime: mentalTime,
-      extraTime: extraTime,
-      gameTimes: gameSpecificTimes,
-      weightedTotalTime: weightedTotalTime,
-      recordedAt: new Date(), // Current date for Firestore Timestamp
+      tiempo_fisico: values.tiempo_fisico,
+      tiempo_mental: values.tiempo_mental,
+      estado_extra: values.estado_extra as ExtraChallengeStatus,
+      gameTimes: values.gameTimes || {}, // Keep logging game times if desired
+      recordedAt: new Date(),
     };
     
-    addScoreMutation.mutate(newScoreData);
+    addScoreMutation.mutate(newScoreData as any); // Cast to any if Score type expects calculated fields
   }
 
   const renderGameTimeFields = (category: GameCategory) => {
@@ -143,7 +136,7 @@ export default function TimesPage() {
 
     return (
       <div className="mt-4 space-y-4">
-        <h4 className="text-md font-semibold text-muted-foreground">{category} Games Times</h4>
+        <h4 className="text-md font-semibold text-muted-foreground">{category} Games Times (Optional Individual Logging)</h4>
         {categoryGames.map(game => (
           <FormField
             key={game.id}
@@ -176,11 +169,11 @@ export default function TimesPage() {
     <>
       <PageHeader
         title="Record Times"
-        description="Enter total category times and specific game times for a participant."
+        description="Enter total physical, mental, and extra challenge status for a participant."
       />
       <Card className="max-w-2xl mx-auto shadow-lg hover:shadow-xl transition-shadow duration-300">
         <CardHeader>
-          <CardTitle>New Time Entry</CardTitle>
+          <CardTitle>New Score Entry</CardTitle>
         </CardHeader>
         <CardContent>
           <Form {...form}>
@@ -224,15 +217,15 @@ export default function TimesPage() {
 
               <FormField
                 control={form.control}
-                name="physicalTime"
+                name="tiempo_fisico"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Total Physical Challenge Time (minutes)</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="e.g., 30" {...field} step="any" disabled={addScoreMutation.isPending} />
+                      <Input type="number" placeholder="e.g., 340.25" {...field} step="any" disabled={addScoreMutation.isPending} />
                     </FormControl>
                     <FormDescription>
-                      Total time taken for all physical challenges.
+                      Total time for all physical challenges (e.g., map search, run, tests).
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -244,15 +237,15 @@ export default function TimesPage() {
 
               <FormField
                 control={form.control}
-                name="mentalTime"
+                name="tiempo_mental"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Total Mental Challenge Time (minutes)</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="e.g., 15" {...field} step="any" disabled={addScoreMutation.isPending}/>
+                      <Input type="number" placeholder="e.g., 125.0" {...field} step="any" disabled={addScoreMutation.isPending}/>
                     </FormControl>
                     <FormDescription>
-                      Total time taken for all mental challenges.
+                      Total time for all mental challenges (e.g., puzzles, enigmas).
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -264,15 +257,28 @@ export default function TimesPage() {
 
               <FormField
                 control={form.control}
-                name="extraTime"
+                name="estado_extra"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Total Extra Bonus Time (minutes, optional)</FormLabel>
-                    <FormControl>
-                      <Input type="number" placeholder="e.g., 5" {...field} step="any" disabled={addScoreMutation.isPending}/>
-                    </FormControl>
+                    <FormLabel>Extra Challenge Status</FormLabel>
+                     <Select
+                      onValueChange={field.onChange}
+                      value={field.value}
+                      disabled={addScoreMutation.isPending}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select status" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="no_hecho">No Hecho</SelectItem>
+                        <SelectItem value="hecho_a_medias">Hecho a Medias</SelectItem>
+                        <SelectItem value="hecho">Hecho</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <FormDescription>
-                      Total bonus time to be subtracted (e.g., for all extra tasks).
+                      Status of completion for the extra challenge(s).
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -288,7 +294,7 @@ export default function TimesPage() {
                   className="bg-primary hover:bg-primary/90 text-primary-foreground" 
                   disabled={addScoreMutation.isPending || participants.length === 0 || isLoadingParticipants || isLoadingGames}
                 >
-                  {addScoreMutation.isPending ? "Saving..." : "Save Times"}
+                  {addScoreMutation.isPending ? "Saving..." : "Save Raw Times"}
                 </Button>
               </div>
             </form>
