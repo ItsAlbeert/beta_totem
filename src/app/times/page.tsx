@@ -4,6 +4,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import React from "react"; // Added React import
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -73,6 +74,7 @@ export default function TimesPage() {
     mutationFn: addScore,
     onSuccess: (newScore) => {
       queryClient.invalidateQueries({ queryKey: ["scores"] });
+      queryClient.invalidateQueries({ queryKey: ["recentScores"] });
       queryClient.invalidateQueries({ queryKey: ["dashboardData"] }); 
       queryClient.invalidateQueries({ queryKey: ["leaderboardData"] });
       queryClient.invalidateQueries({ queryKey: ["trendsData"] });
@@ -113,14 +115,26 @@ export default function TimesPage() {
     if (games.length > 0) {
       const initialExtraStatuses: { [key: string]: ExtraChallengeStatus } = {};
       games.filter(g => g.category === 'Extra').forEach(g => {
-        initialExtraStatuses[g.id] = 'no_hecho';
+        initialExtraStatuses[g.id] = 'no_hecho'; // Default to 'no_hecho' for all extra games
       });
-      form.reset((currentValues) => ({
-        ...currentValues,
-        extraGameStatuses: initialExtraStatuses,
-      }));
+      // Only update extraGameStatuses if they haven't been touched by the user for the current form session
+      // This prevents overriding user input if games list re-fetches for some reason.
+      // A more robust way might involve checking if the form is dirty for these fields.
+      const currentExtraStatuses = form.getValues('extraGameStatuses');
+      const hasUserSetExtraStatus = Object.keys(currentExtraStatuses || {}).length > 0;
+
+      if (!hasUserSetExtraStatus) {
+         form.reset((currentValues) => ({
+           ...currentValues,
+           extraGameStatuses: initialExtraStatuses,
+         }));
+      } else {
+        // If user has set some, ensure all defined extra games have at least a default
+        const updatedStatuses = { ...initialExtraStatuses, ...currentExtraStatuses };
+        form.setValue('extraGameStatuses', updatedStatuses);
+      }
     }
-  }, [games, form.reset]);
+  }, [games, form]); // form.reset and form.setValue are stable
 
 
   async function onSubmit(values: TimeInputFormValues) {
@@ -134,12 +148,18 @@ export default function TimesPage() {
       return;
     }
     
+    // Ensure all defined extra games have a status
+    const finalExtraStatuses: { [key: string]: ExtraChallengeStatus } = {};
+    games.filter(g => g.category === 'Extra').forEach(g => {
+      finalExtraStatuses[g.id] = values.extraGameStatuses?.[g.id] || 'no_hecho';
+    });
+
     const newScoreData = {
       participantId: values.participantId,
       tiempo_fisico: values.tiempo_fisico,
       tiempo_mental: values.tiempo_mental,
       gameTimes: values.gameTimes || {},
-      extraGameStatuses: values.extraGameStatuses || {},
+      extraGameStatuses: finalExtraStatuses, // Use the ensured statuses
       recordedAt: new Date(),
     };
     
@@ -148,7 +168,7 @@ export default function TimesPage() {
 
   const renderGameTimeFields = (category: GameCategory) => {
     const categoryGames = games.filter(game => game.category === category);
-    if (categoryGames.length === 0 || category === 'Extra') return null; // 'Extra' games handled by renderGameStatusFields
+    if (categoryGames.length === 0 || category === 'Extra') return null;
 
     return (
       <div className="mt-4 space-y-4">
@@ -193,7 +213,7 @@ export default function TimesPage() {
             key={game.id}
             control={form.control}
             name={`extraGameStatuses.${game.id}`}
-            defaultValue={'no_hecho' as ExtraChallengeStatus} // Default for each extra game
+            defaultValue={'no_hecho' as ExtraChallengeStatus} 
             render={({ field }) => (
               <FormItem className="ml-4">
                 <FormLabel>{game.name}</FormLabel>
@@ -313,7 +333,6 @@ export default function TimesPage() {
               
               <Separator />
               
-              {/* Render status fields for Extra games */}
               {renderGameStatusFields()}
               
               <Separator />
