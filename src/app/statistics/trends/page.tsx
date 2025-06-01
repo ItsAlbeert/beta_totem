@@ -105,7 +105,6 @@ export default function TrendsPage() {
     );
   };
 
-  // Data for Category Total Time Bar Chart
   const categoryTotalTimeChartData = useMemo(() => {
     if (!processedData) return { Physical: [], Mental: [], Extra: [] };
     const { participants, latestScoresMap, participantsMap } = processedData;
@@ -126,13 +125,12 @@ export default function TrendsPage() {
           }
         }
       });
-       result[category].sort((a, b) => (a.score ?? Infinity) - (b.score ?? Infinity)); // Lower is better
+       result[category].sort((a, b) => (a.score ?? Infinity) - (b.score ?? Infinity));
     });
     return result;
   }, [processedData]);
 
 
-  // Data for Individual Game Bar Chart
   const individualGameChartData = useMemo(() => {
     if (!processedData) return {};
     const { participants, games, latestScoresMap, participantsMap } = processedData;
@@ -152,7 +150,6 @@ export default function TrendsPage() {
     return result;
   }, [processedData]);
 
-  // Data for Participant Performance Over Time (Line Chart)
   const participantTrendChart = useMemo(() => {
     if (!processedData || selectedParticipantIdsForTrend.length === 0) return { chartData: [], chartConfig: {} };
     const { scores, participantsMap } = processedData;
@@ -184,7 +181,6 @@ export default function TrendsPage() {
   }, [processedData, selectedParticipantIdsForTrend]);
 
 
-  // Data for Game Comparison (Grouped Bar Chart)
   const gameComparisonChart = useMemo(() => {
     if (!processedData || selectedGameIdsForComparison.length === 0) return { chartData: [], chartConfig: {} };
     const { participants, gamesMap, latestScoresMap, participantsMap } = processedData;
@@ -221,7 +217,7 @@ export default function TrendsPage() {
       <Card className={cn("shadow-md", !mainChart && "sm:col-span-1")}>
         <CardHeader>
           <CardTitle className={mainChart ? "text-xl" : "text-lg"}>{title}</CardTitle>
-          {mainChart && <CardDescription>{description}</CardDescription>}
+          {mainChart && description && <CardDescription>{description}</CardDescription>}
         </CardHeader>
         <CardContent>
           <ChartContainer config={config} className={cn(mainChart ? "h-[350px]" : "h-[200px]", "w-full")}>
@@ -255,7 +251,7 @@ export default function TrendsPage() {
       <Card className="shadow-lg">
         <CardHeader>
           <CardTitle>{title}</CardTitle>
-          <CardDescription>{description}</CardDescription>
+          {description && <CardDescription>{description}</CardDescription>}
         </CardHeader>
         <CardContent>
           <ChartContainer config={config} className="h-[400px] w-full">
@@ -284,7 +280,7 @@ export default function TrendsPage() {
       <Card className="shadow-lg">
         <CardHeader>
           <CardTitle>{title}</CardTitle>
-          <CardDescription>{description}</CardDescription>
+          {description && <CardDescription>{description}</CardDescription>}
         </CardHeader>
         <CardContent>
           <ChartContainer config={config} className="h-[400px] w-full">
@@ -330,7 +326,7 @@ export default function TrendsPage() {
                 <div key={game.id}>
                 {renderBarChart(
                   game.name,
-                  "", // No description for small charts
+                  "", 
                   individualGameChartData[game.id] || [],
                   "score",
                   "Time (min)",
@@ -362,6 +358,7 @@ export default function TrendsPage() {
             <Skeleton className="h-[600px] w-full mb-8" />
             <Skeleton className="h-[600px] w-full mb-8" />
             <Skeleton className="h-[600px] w-full" />
+            <Skeleton className="h-[800px] w-full" /> 
           </>
         ) : (
           <>
@@ -369,18 +366,20 @@ export default function TrendsPage() {
             {renderCategorySection('Mental', 'Mental Challenge')}
             {renderCategorySection('Extra', 'Extra Bonus')}
 
-            <Card className="shadow-xl pt-6">
-              <CardHeader>
-                <CardTitle className="text-3xl border-b pb-2">Comparisons</CardTitle>
-                <CardDescription>Select participants or games below for specific comparisons.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-10">
-                {/* Participant Comparison Trend */}
+            {/* Comparisons Block */}
+            <div className="mt-12"> {/* Added margin-top for clear separation */}
+              <div>
+                <h2 className="text-3xl font-semibold border-b pb-2 mb-2">Comparisons</h2>
+                <p className="text-sm text-muted-foreground mb-6">Select participants or games below for specific comparisons.</p>
+              </div>
+
+              <div className="space-y-10">
+                {/* Participant Comparison Trend Sub-section */}
                 <div>
                   <h3 className="text-2xl font-medium mb-3">Participant Performance Trend</h3>
                   <p className="text-sm text-muted-foreground mb-4">Compare weighted total time trends for selected participants across their score recordings. Lower is better.</p>
-                  <div className="mb-6 p-4 border rounded-md bg-card">
-                    <h4 className="text-lg font-medium mb-2">Select Participants:</h4>
+                  <div className="mb-4 p-4 border rounded-md bg-background shadow-sm">
+                    <h4 className="text-md font-medium mb-3 text-foreground/90">Select Participants:</h4>
                     {processedData && processedData.participants.length > 0 ? (
                       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                         {processedData.participants.map((p) => (
@@ -393,20 +392,20 @@ export default function TrendsPage() {
                     ) : <p className="text-sm text-muted-foreground">No participants available.</p>}
                   </div>
                   {renderLineChart(
-                    "Participant Weighted Total Time Trend",
-                    "",
+                    "Participant Weighted Total Time Trend", 
+                    "", // Description is covered by the <p> tag above
                     participantTrendChart.chartData,
                     participantTrendChart.chartConfig,
                     "Weighted Time (min)"
                   )}
                 </div>
 
-                {/* Game Comparison */}
+                {/* Game Comparison Sub-section */}
                 <div>
                   <h3 className="text-2xl font-medium mb-3">Game Performance Comparison</h3>
                   <p className="text-sm text-muted-foreground mb-4">Compare participant performance across selected games (based on latest scores). Lower is better.</p>
-                  <div className="mb-6 p-4 border rounded-md bg-card">
-                    <h4 className="text-lg font-medium mb-2">Select Games:</h4>
+                  <div className="mb-4 p-4 border rounded-md bg-background shadow-sm">
+                    <h4 className="text-md font-medium mb-3 text-foreground/90">Select Games:</h4>
                     {processedData && processedData.games.length > 0 ? (
                       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                         {processedData.games.map((g) => (
@@ -419,14 +418,14 @@ export default function TrendsPage() {
                     ) : <p className="text-sm text-muted-foreground">No games available.</p>}
                   </div>
                   {renderGroupedBarChart(
-                    "Game Performance Comparison",
-                    "",
+                    "Game Performance Comparison", 
+                    "", // Description is covered by the <p> tag above
                     gameComparisonChart.chartData,
                     gameComparisonChart.chartConfig
                   )}
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </>
         )}
       </div>
