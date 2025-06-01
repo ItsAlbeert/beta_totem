@@ -2,109 +2,495 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ===== CSS VARIABLES ===== */
 @layer base {
   :root {
-    --background: 220 13% 95%; /* Light Gray #F0F2F5 */
-    --foreground: 220 10% 20%; /* Dark Gray #2D313D */
-
-    --card: 0 0% 100%; /* White */
-    --card-foreground: 220 10% 20%;
-
-    --popover: 0 0% 100%; /* White */
-    --popover-foreground: 220 10% 20%;
-
-    --primary: 197 71% 53%; /* Vibrant Blue #29ABE2 */
-    --primary-foreground: 0 0% 100%; /* White */
-
-    --secondary: 220 13% 90%; /* Muted Gray for secondary elements */
-    --secondary-foreground: 197 71% 53%; /* Primary blue for text on secondary */
-
-    --muted: 220 13% 90%; /* Lighter Gray for muted backgrounds */
-    --muted-foreground: 220 10% 45%; /* Gray for muted text */
-
-    --accent: 40 100% 67%; /* Contrasting Yellow #FFC857 */
-    --accent-foreground: 35 70% 20%; /* Dark Brown/Orange for text on yellow */
-
+    /* Base colors */
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    
+    /* Card colors */
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    
+    /* Popover colors */
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    
+    /* Primary colors */
+    --primary: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
+    
+    /* Secondary colors */
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    
+    /* Muted colors */
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    
+    /* Accent colors */
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    
+    /* Status colors */
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-
-    --border: 220 10% 88%; /* Slightly darker than muted for borders */
-    --input: 220 10% 88%; /* Same as border for input borders */
-    --ring: 197 71% 53%; /* Primary color for focus rings */
-
+    --destructive-foreground: 210 40% 98%;
+    
+    --success: 142 76% 36%;
+    --success-foreground: 355 7% 97%;
+    
+    --warning: 38 92% 50%;
+    --warning-foreground: 48 96% 89%;
+    
+    --info: 199 89% 48%;
+    --info-foreground: 210 20% 98%;
+    
+    /* UI colors */
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 222.2 84% 4.9%;
+    
+    /* Chart colors */
+    --chart-1: 12 76% 61%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+    
+    /* Sidebar colors */
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+    
+    /* Border radius */
     --radius: 0.5rem;
-
-    /* Chart colors (can be adjusted based on theme if needed) */
-    --chart-1: 197 71% 53%; /* Primary Blue */
-    --chart-2: 40 100% 67%; /* Accent Yellow */
-    --chart-3: 220 50% 60%; /* A complementary blue/gray */
-    --chart-4: 25 80% 60%; /* An orange */
-    --chart-5: 140 50% 55%; /* A green */
-
-    /* Sidebar specific theme variables */
-    --sidebar-background: 0 0% 100%; /* White */
-    --sidebar-foreground: 220 10% 30%; /* Dark gray for sidebar text */
-    --sidebar-border: 220 10% 90%; /* Light gray border for sidebar */
-    --sidebar-accent: 220 13% 94%; /* Very light gray for hover on sidebar items */
-    --sidebar-accent-foreground: 197 71% 53%; /* Primary blue for text/icon on hover */
-    --sidebar-primary: 197 71% 53%; /* Primary blue for active item background */
-    --sidebar-primary-foreground: 0 0% 100%; /* White text for active item */
-    --sidebar-ring: 197 71% 53%; /* Primary for focus rings in sidebar */
+    
+    /* Typography */
+    --font-sans: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
+    
+    /* Shadows */
+    --shadow-color: 220 3% 15%;
+    --shadow-strength: 1%;
   }
 
   .dark {
-    /* TODO: Define dark theme based on the color scheme if needed */
-    --background: 220 10% 12%;
-    --foreground: 0 0% 98%;
-
-    --card: 220 10% 15%;
-    --card-foreground: 0 0% 98%;
-
-    --popover: 220 10% 15%;
-    --popover-foreground: 0 0% 98%;
-
-    --primary: 197 71% 53%;
-    --primary-foreground: 0 0% 100%;
-
-    --secondary: 220 10% 25%;
-    --secondary-foreground: 0 0% 98%;
-
-    --muted: 220 10% 25%;
-    --muted-foreground: 0 0% 63.9%;
-
-    --accent: 40 100% 67%;
-    --accent-foreground: 35 70% 20%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-
-    --border: 220 10% 25%;
-    --input: 220 10% 25%;
-    --ring: 197 71% 53%;
+    /* Base colors */
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
     
-    --chart-1: 197 71% 53%;
-    --chart-2: 40 100% 67%;
-    --chart-3: 220 50% 60%;
-    --chart-4: 25 80% 60%;
-    --chart-5: 140 50% 55%;
-
-    --sidebar-background: 220 10% 10%;
-    --sidebar-foreground: 0 0% 95%;
-    --sidebar-border: 220 10% 20%;
-    --sidebar-accent: 220 10% 18%;
-    --sidebar-accent-foreground: 197 71% 53%;
-    --sidebar-primary: 197 71% 53%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-ring: 197 71% 53%;
+    /* Card colors */
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    
+    /* Popover colors */
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    
+    /* Primary colors */
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    
+    /* Secondary colors */
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    
+    /* Muted colors */
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    
+    /* Accent colors */
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    
+    /* Status colors */
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    
+    --success: 142 71% 45%;
+    --success-foreground: 144 61% 20%;
+    
+    --warning: 38 92% 50%;
+    --warning-foreground: 48 96% 89%;
+    
+    --info: 199 89% 48%;
+    --info-foreground: 210 20% 98%;
+    
+    /* UI colors */
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
+    
+    /* Chart colors */
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+    
+    /* Sidebar colors */
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 0 0% 98%;
+    --sidebar-primary-foreground: 240 5.9% 10%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+    
+    /* Shadows */
+    --shadow-color: 220 3% 2%;
+    --shadow-strength: 25%;
   }
 }
 
+/* ===== BASE STYLES ===== */
 @layer base {
+  /* Reset and base styles */
   * {
     @apply border-border;
   }
+  
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+  
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    scroll-behavior: smooth;
+  }
+  
   body {
     @apply bg-background text-foreground;
-    /* Font family is set by Tailwind config via Geist font variables */
+    font-feature-settings: "rlig" 1, "calt" 1;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+  }
+  
+  /* Typography improvements */
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold tracking-tight;
+    text-wrap: balance;
+  }
+  
+  h1 {
+    @apply text-4xl lg:text-5xl;
+  }
+  
+  h2 {
+    @apply text-3xl lg:text-4xl;
+  }
+  
+  h3 {
+    @apply text-2xl lg:text-3xl;
+  }
+  
+  h4 {
+    @apply text-xl lg:text-2xl;
+  }
+  
+  h5 {
+    @apply text-lg lg:text-xl;
+  }
+  
+  h6 {
+    @apply text-base lg:text-lg;
+  }
+  
+  p {
+    @apply leading-7;
+    text-wrap: pretty;
+  }
+  
+  /* Link styles */
+  a {
+    @apply text-primary underline-offset-4 hover:underline;
+    transition: color 0.2s ease-in-out;
+  }
+  
+  /* Focus styles for accessibility */
+  *:focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+  
+  /* Button reset */
+  button {
+    @apply cursor-pointer;
+  }
+  
+  button:disabled {
+    @apply cursor-not-allowed opacity-50;
+  }
+  
+  /* Form elements */
+  input, textarea, select {
+    @apply bg-background;
+  }
+  
+  input::placeholder,
+  textarea::placeholder {
+    @apply text-muted-foreground;
+  }
+  
+  /* Selection styles */
+  ::selection {
+    @apply bg-primary/20 text-primary-foreground;
+  }
+  
+  ::-moz-selection {
+    @apply bg-primary/20 text-primary-foreground;
+  }
+  
+  /* Scrollbar styles */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    @apply bg-muted;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    @apply bg-border rounded-full;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-border/80;
+  }
+  
+  /* Firefox scrollbar */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) hsl(var(--muted));
+  }
+  
+  /* Image optimization */
+  img {
+    @apply max-w-full h-auto;
+  }
+  
+  /* Code blocks */
+  code {
+    @apply relative rounded bg-muted px-[0.3rem] py-[0.2rem] font-mono text-sm font-semibold;
+  }
+  
+  pre {
+    @apply overflow-x-auto rounded-lg bg-muted p-4;
+  }
+  
+  pre code {
+    @apply bg-transparent p-0;
+  }
+  
+  /* Tables */
+  table {
+    @apply w-full border-collapse;
+  }
+  
+  th, td {
+    @apply border-b border-border px-4 py-2 text-left;
+  }
+  
+  th {
+    @apply font-semibold;
+  }
+  
+  /* Blockquotes */
+  blockquote {
+    @apply border-l-4 border-primary pl-4 italic;
+  }
+  
+  /* HR */
+  hr {
+    @apply border-border;
+  }
+}
+
+/* ===== UTILITY CLASSES ===== */
+@layer utilities {
+  /* Text utilities */
+  .text-balance {
+    text-wrap: balance;
+  }
+  
+  .text-pretty {
+    text-wrap: pretty;
+  }
+  
+  /* Animation utilities */
+  .animate-in {
+    animation-duration: 0.2s;
+    animation-fill-mode: both;
+  }
+  
+  .animate-out {
+    animation-duration: 0.2s;
+    animation-fill-mode: both;
+  }
+  
+  /* Scrollbar utilities */
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .scrollbar-thin {
+    scrollbar-width: thin;
+  }
+  
+  /* Focus utilities */
+  .focus-ring {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background;
+  }
+  
+  /* Glass effect */
+  .glass {
+    @apply bg-background/80 backdrop-blur-md border border-border/50;
+  }
+  
+  /* Gradient text */
+  .gradient-text {
+    @apply bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent;
+  }
+  
+  /* Shadow utilities */
+  .shadow-colored {
+    box-shadow: 
+      0 1px 2px hsl(var(--shadow-color) / calc(var(--shadow-strength) + 9%)),
+      0 2px 4px hsl(var(--shadow-color) / calc(var(--shadow-strength) + 9%)),
+      0 4px 8px hsl(var(--shadow-color) / calc(var(--shadow-strength) + 9%)),
+      0 8px 16px hsl(var(--shadow-color) / calc(var(--shadow-strength) + 9%));
+  }
+}
+
+/* ===== COMPONENT STYLES ===== */
+@layer components {
+  /* Loading spinner */
+  .spinner {
+    @apply inline-block h-4 w-4 animate-spin rounded-full border-2 border-solid border-current border-r-transparent motion-reduce:animate-[spin_1.5s_linear_infinite];
+  }
+  
+  /* Skeleton loader */
+  .skeleton {
+    @apply animate-pulse rounded-md bg-muted;
+  }
+  
+  /* Card component */
+  .card {
+    @apply rounded-lg border bg-card text-card-foreground shadow-sm;
+  }
+  
+  /* Button variants */
+  .btn {
+    @apply inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-ring disabled:pointer-events-none disabled:opacity-50;
+  }
+  
+  .btn-primary {
+    @apply bg-primary text-primary-foreground hover:bg-primary/90;
+  }
+  
+  .btn-secondary {
+    @apply bg-secondary text-secondary-foreground hover:bg-secondary/80;
+  }
+  
+  .btn-outline {
+    @apply border border-input bg-background hover:bg-accent hover:text-accent-foreground;
+  }
+  
+  .btn-ghost {
+    @apply hover:bg-accent hover:text-accent-foreground;
+  }
+  
+  /* Input styles */
+  .input {
+    @apply flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-ring disabled:cursor-not-allowed disabled:opacity-50;
+  }
+}
+
+/* ===== RESPONSIVE DESIGN ===== */
+@media (max-width: 768px) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/* ===== ACCESSIBILITY ===== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ===== PRINT STYLES ===== */
+@media print {
+  * {
+    background: transparent !important;
+    color: black !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+  
+  a,
+  a:visited {
+    text-decoration: underline;
+  }
+  
+  a[href]:after {
+    content: " (" attr(href) ")";
+  }
+  
+  abbr[title]:after {
+    content: " (" attr(title) ")";
+  }
+  
+  pre,
+  blockquote {
+    border: 1px solid #999;
+    page-break-inside: avoid;
+  }
+  
+  thead {
+    display: table-header-group;
+  }
+  
+  tr,
+  img {
+    page-break-inside: avoid;
+  }
+  
+  img {
+    max-width: 100% !important;
+  }
+  
+  p,
+  h2,
+  h3 {
+    orphans: 3;
+    widows: 3;
+  }
+  
+  h2,
+  h3 {
+    page-break-after: avoid;
   }
 }
