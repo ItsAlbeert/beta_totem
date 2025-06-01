@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -18,22 +18,7 @@ import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Responsive
 import { Skeleton } from "@/components/ui/skeleton";
 import { format, parseISO } from 'date-fns';
 import { cn } from "@/lib/utils";
-
-const PARTICIPANTS_STORAGE_KEY = "chronoScoreParticipants";
-const SCORES_STORAGE_KEY = "chronoScoreScores";
-const GAMES_STORAGE_KEY = "chronoScoreGames";
-
-const getStoredData = <T,>(key: string, defaultValue: T[] = []): T[] => {
-  if (typeof window === 'undefined') return defaultValue;
-  const stored = localStorage.getItem(key);
-  try {
-    return stored ? JSON.parse(stored) as T[] : defaultValue;
-  } catch (e) {
-    console.error(`Failed to parse ${key} from localStorage`, e);
-    localStorage.removeItem(key);
-    return defaultValue;
-  }
-};
+import { getStoredData, PARTICIPANTS_STORAGE_KEY, SCORES_STORAGE_KEY, GAMES_STORAGE_KEY } from "@/lib/storage";
 
 const chartColors = [
   "hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))",
@@ -42,26 +27,26 @@ const chartColors = [
 
 const getColor = (index: number) => chartColors[index % chartColors.length];
 
-interface ProcessedData {
+interface ProcessedPageData {
   participants: Participant[];
   scores: Score[];
   games: Game[];
-  latestScoresMap: Map<string, Score>;
   participantsMap: Map<string, Participant>;
   gamesMap: Map<string, Game>;
+  latestScoresMap: Map<string, Score>; // Added for game comparison chart
 }
 
 export default function ComparisonsPage() {
   const [loading, setLoading] = useState(true);
-  const [processedData, setProcessedData] = useState<ProcessedData | null>(null);
+  const [processedData, setProcessedData] = useState<ProcessedPageData | null>(null);
   const [selectedParticipantIdsForComparison, setSelectedParticipantIdsForComparison] = useState<string[]>([]);
   const [selectedGameIdsForComparison, setSelectedGameIdsForComparison] = useState<string[]>([]);
 
-  const fetchData = () => {
+  const fetchData = useCallback(() => {
     setLoading(true);
-    const participants = getStoredData<Participant>(PARTICIPANTS_STORAGE_KEY);
-    const scores = getStoredData<Score>(SCORES_STORAGE_KEY);
-    const games = getStoredData<Game>(GAMES_STORAGE_KEY);
+    const participants = getStoredData<Participant>(PARTICIPANTS_STORAGE_KEY, []);
+    const scores = getStoredData<Score>(SCORES_STORAGE_KEY, []);
+    const games = getStoredData<Game>(GAMES_STORAGE_KEY, []);
 
     const participantsMap = new Map(participants.map(p => [p.id, p]));
     const gamesMap = new Map(games.map(g => [g.id, g]));
@@ -69,14 +54,14 @@ export default function ComparisonsPage() {
     const latestScoresMap = new Map<string, Score>();
     scores.forEach(score => {
       const existing = latestScoresMap.get(score.participantId);
-      if (!existing || new Date(score.recordedAt) > new Date(existing.recordedAt)) {
+      if (!existing || new Date(score.recordedAt).getTime() > new Date(existing.recordedAt).getTime()) {
         latestScoresMap.set(score.participantId, score);
       }
     });
 
-    setProcessedData({ participants, scores, games, latestScoresMap, participantsMap, gamesMap });
+    setProcessedData({ participants, scores, games, participantsMap, gamesMap, latestScoresMap });
     setLoading(false);
-  };
+  }, []);
 
   useEffect(() => {
     fetchData();
@@ -91,7 +76,7 @@ export default function ComparisonsPage() {
     };
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
+  }, [fetchData]);
 
   const handleParticipantSelection = (participantId: string, checked: boolean) => {
     setSelectedParticipantIdsForComparison(prev =>
@@ -114,7 +99,7 @@ export default function ComparisonsPage() {
     
     const uniqueTimestamps = Array.from(new Set(relevantScores.map(s => parseISO(s.recordedAt).getTime())))
       .sort((a, b) => a - b)
-      .map(ts => parseISO(new Date(ts).toISOString()));
+      .map(ts => parseISO(new Date(ts).toISOString())); // Ensure it's a Date object for formatting
 
     const chartData: PerformanceOverTimeDataPoint[] = uniqueTimestamps.map(timestamp => {
       const formattedTime = format(timestamp, "MMM d, HH:mm");
@@ -145,13 +130,13 @@ export default function ComparisonsPage() {
 
     const chartData: MultiMetricDataPoint[] = participants.map(p => {
       const participantName = participantsMap.get(p.id)?.name || p.id;
-      const dataPoint: MultiMetricDataPoint = { name: participantName };
+      const dataPoint: MultiMetricDataPoint = { name: participantName }; // 'name' should be participant name for X-axis
       const latestScore = latestScoresMap.get(p.id);
       selectedGames.forEach(game => {
         dataPoint[game.name] = latestScore?.gameTimes?.[game.id] ?? null;
       });
       return dataPoint;
-    });
+    }).filter(dp => selectedGames.some(game => dp[game.name] !== null && dp[game.name] !== undefined)); // Filter out participants with no data for any selected game
     
     const chartConfig: ChartConfig = {};
     selectedGames.forEach((game, index) => {
@@ -174,16 +159,18 @@ export default function ComparisonsPage() {
         </CardHeader>
         <CardContent>
           <ChartContainer config={config} className="h-[400px] w-full">
-            <LineChart data={data} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="time" stroke="hsl(var(--muted-foreground))" />
-              <YAxis label={{ value: yAxisLabel, angle: -90, position: 'insideLeft', fill: 'hsl(var(--muted-foreground))', dx: -10 }} stroke="hsl(var(--muted-foreground))" />
-              <ChartTooltip content={<ChartTooltipContent indicator="line" />} />
-              <ChartLegend content={<ChartLegendContent />} />
-              {Object.keys(config).map((participantName) => (
-                <Line key={participantName} type="monotone" dataKey={participantName} stroke={config[participantName]?.color} strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} connectNulls={true} />
-              ))}
-            </LineChart>
+            <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={data} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="time" stroke="hsl(var(--muted-foreground))" />
+                <YAxis label={{ value: yAxisLabel, angle: -90, position: 'insideLeft', fill: 'hsl(var(--muted-foreground))', dx: -10 }} stroke="hsl(var(--muted-foreground))" />
+                <ChartTooltip content={<ChartTooltipContent indicator="line" />} />
+                <ChartLegend content={<ChartLegendContent />} />
+                {Object.keys(config).map((participantName) => (
+                    <Line key={participantName} type="monotone" dataKey={participantName} stroke={config[participantName]?.color} strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} connectNulls />
+                ))}
+                </LineChart>
+            </ResponsiveContainer>
           </ChartContainer>
         </CardContent>
       </Card>
@@ -191,8 +178,8 @@ export default function ComparisonsPage() {
   };
 
   const renderGroupedBarChart = (title: string, description: string, data: MultiMetricDataPoint[], config: ChartConfig, yAxisLabel: string = "Time (min)") => {
-    if (loading && data.length === 0) return <Skeleton className="h-[400px] w-full" />;
-    if (!loading && data.length === 0 && selectedGameIdsForComparison.length > 0) return <p className="text-center text-muted-foreground py-8">No data for selected games.</p>;
+    if (loading && data.length === 0 && selectedGameIdsForComparison.length === 0) return <Skeleton className="h-[400px] w-full" />;
+    if (!loading && selectedGameIdsForComparison.length > 0 && data.length === 0 ) return <p className="text-center text-muted-foreground py-8">No data for selected games or participants with scores in those games.</p>;
     if (selectedGameIdsForComparison.length === 0) return <p className="text-center text-muted-foreground py-8">Select games to compare.</p>;
 
     return (
@@ -203,6 +190,7 @@ export default function ComparisonsPage() {
         </CardHeader>
         <CardContent>
           <ChartContainer config={config} className="h-[400px] w-full">
+           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis dataKey="name" tickFormatter={(value) => value.length > 10 ? `${value.substring(0,7)}...` : value} stroke="hsl(var(--muted-foreground))"/>
@@ -213,6 +201,7 @@ export default function ComparisonsPage() {
                 <Bar key={gameName} dataKey={gameName} fill={config[gameName]?.color} radius={4} />
               ))}
             </BarChart>
+            </ResponsiveContainer>
           </ChartContainer>
         </CardContent>
       </Card>

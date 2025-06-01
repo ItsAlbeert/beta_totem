@@ -28,10 +28,7 @@ import { useToast } from "@/hooks/use-toast";
 import type { Participant, Score, Game, GameCategory } from "@/types";
 import { useState, useEffect } from "react";
 import { Separator } from "@/components/ui/separator";
-
-const PARTICIPANTS_STORAGE_KEY = "chronoScoreParticipants";
-const SCORES_STORAGE_KEY = "chronoScoreScores";
-const GAMES_STORAGE_KEY = "chronoScoreGames";
+import { getStoredData, storeData, PARTICIPANTS_STORAGE_KEY, GAMES_STORAGE_KEY, SCORES_STORAGE_KEY } from "@/lib/storage";
 
 const timeInputSchema = z.object({
   participantId: z.string().min(1, "Participant selection is required."),
@@ -50,36 +47,6 @@ const timeInputSchema = z.object({
 
 type TimeInputFormValues = z.infer<typeof timeInputSchema>;
 
-const getStoredParticipants = (): Participant[] => {
-  if (typeof window !== 'undefined') {
-    const stored = localStorage.getItem(PARTICIPANTS_STORAGE_KEY);
-    return stored ? JSON.parse(stored) : [];
-  }
-  return [];
-};
-
-const getStoredGames = (): Game[] => {
-  if (typeof window !== 'undefined') {
-    const stored = localStorage.getItem(GAMES_STORAGE_KEY);
-    return stored ? JSON.parse(stored) : [];
-  }
-  return [];
-};
-
-const getStoredScores = (): Score[] => {
-  if (typeof window !== 'undefined') {
-    const stored = localStorage.getItem(SCORES_STORAGE_KEY);
-    return stored ? JSON.parse(stored) : [];
-  }
-  return [];
-};
-
-const storeScores = (scores: Score[]) => {
-  if (typeof window !== 'undefined') {
-    localStorage.setItem(SCORES_STORAGE_KEY, JSON.stringify(scores));
-  }
-};
-
 export default function TimesPage() {
   const { toast } = useToast();
   const [participants, setParticipants] = useState<Participant[]>([]);
@@ -96,46 +63,36 @@ export default function TimesPage() {
     },
   });
 
+  const loadInitialData = () => {
+    const storedParticipants = getStoredData<Participant>(PARTICIPANTS_STORAGE_KEY, []);
+    setParticipants(storedParticipants);
+    setGames(getStoredData<Game>(GAMES_STORAGE_KEY, []));
+
+    const currentSelectedId = form.getValues("participantId");
+    if (currentSelectedId && !storedParticipants.find(p => p.id === currentSelectedId)) {
+        form.resetField("participantId");
+        form.setValue("participantId", ""); // Explicitly set to empty string
+    }
+  };
+  
   useEffect(() => {
-    setParticipants(getStoredParticipants());
-    setGames(getStoredGames());
+    loadInitialData();
 
     const handleStorageChange = (event: StorageEvent) => {
-      if (event.key === PARTICIPANTS_STORAGE_KEY) {
-        const updatedParticipants = getStoredParticipants();
-        setParticipants(updatedParticipants);
-        const currentSelectedId = form.getValues("participantId");
-        if (currentSelectedId && !updatedParticipants.find(p => p.id === currentSelectedId)) {
-          form.resetField("participantId");
-          form.setValue("participantId", "");
-        }
-      }
-      if (event.key === GAMES_STORAGE_KEY) {
-        setGames(getStoredGames());
-        // Potentially reset gameTimes if games structure changes significantly, or re-validate
-        // For now, just reload. If a game was deleted, its field won't render.
-        // If a game was added, its field will appear.
+      if (event.key === PARTICIPANTS_STORAGE_KEY || event.key === GAMES_STORAGE_KEY) {
+        loadInitialData();
       }
     };
 
     if (typeof window !== 'undefined') {
       window.addEventListener('storage', handleStorageChange);
-      const refreshOnFocus = () => {
-        setParticipants(getStoredParticipants());
-        setGames(getStoredGames());
-        const currentSelectedId = form.getValues("participantId");
-        if (currentSelectedId && !getStoredParticipants().find(p => p.id === currentSelectedId)) {
-            form.resetField("participantId");
-            form.setValue("participantId", "");
-        }
-      }
-      window.addEventListener('focus', refreshOnFocus);
+      window.addEventListener('focus', loadInitialData); // Refresh on focus as well
       return () => {
         window.removeEventListener('storage', handleStorageChange);
-        window.removeEventListener('focus', refreshOnFocus);
+        window.removeEventListener('focus', loadInitialData);
       };
     }
-  }, [form]);
+  }, [form]); // form is a dependency to re-evaluate selection if form object changes
 
   async function onSubmit(values: TimeInputFormValues) {
     const selectedParticipant = participants.find(p => p.id === values.participantId);
@@ -168,16 +125,16 @@ export default function TimesPage() {
       recordedAt: new Date().toISOString(),
     };
 
-    const existingScores = getStoredScores();
+    const existingScores = getStoredData<Score>(SCORES_STORAGE_KEY, []);
     const updatedScores = [...existingScores, newScore];
-    storeScores(updatedScores);
+    storeData<Score>(SCORES_STORAGE_KEY, updatedScores);
     
     toast({
       title: "Time Recorded Successfully!",
       description: `Times for ${selectedParticipant.name} have been saved. Weighted total: ${weightedTotalTime} min.`,
       variant: "default",
     });
-    form.reset({ // Reset with specific empty/default values
+    form.reset({ 
       participantId: "",
       physicalTime: 0,
       mentalTime: 0,
@@ -206,7 +163,7 @@ export default function TimesPage() {
                     type="number" 
                     placeholder="e.g., 10" 
                     {...field} 
-                    value={field.value ?? ''} // Handle undefined by showing empty string
+                    value={field.value ?? ''} 
                     onChange={e => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))} 
                     step="any" 
                   />
@@ -241,7 +198,7 @@ export default function TimesPage() {
                     <FormLabel>Participant</FormLabel>
                     <Select 
                       onValueChange={field.onChange} 
-                      value={field.value}
+                      value={field.value} // Ensure value is controlled
                     >
                       <FormControl>
                         <SelectTrigger>
@@ -268,7 +225,6 @@ export default function TimesPage() {
 
               <Separator />
 
-              {/* Physical Times */}
               <FormField
                 control={form.control}
                 name="physicalTime"
@@ -289,7 +245,6 @@ export default function TimesPage() {
 
               <Separator />
 
-              {/* Mental Times */}
               <FormField
                 control={form.control}
                 name="mentalTime"
@@ -310,7 +265,6 @@ export default function TimesPage() {
               
               <Separator />
 
-              {/* Extra Times */}
               <FormField
                 control={form.control}
                 name="extraTime"

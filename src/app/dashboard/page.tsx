@@ -11,10 +11,9 @@ import type { Participant, Score, Game, LeaderboardEntry } from "@/types";
 import { Icons } from "@/components/icons";
 import { format, formatDistanceToNowStrict } from 'date-fns';
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { getStoredData, PARTICIPANTS_STORAGE_KEY, SCORES_STORAGE_KEY, GAMES_STORAGE_KEY } from "@/lib/storage";
+import { processLeaderboardData } from "@/lib/data-utils";
 
-const PARTICIPANTS_STORAGE_KEY = "chronoScoreParticipants";
-const SCORES_STORAGE_KEY = "chronoScoreScores";
-const GAMES_STORAGE_KEY = "chronoScoreGames";
 
 interface DashboardData {
   totalParticipants: number;
@@ -25,62 +24,24 @@ interface DashboardData {
   totalScoresLogged: number;
 }
 
-const getStoredData = <T,>(key: string, defaultValue: T[] = []): T[] => {
-  if (typeof window === 'undefined') return defaultValue;
-  const stored = localStorage.getItem(key);
-  try {
-    return stored ? JSON.parse(stored) as T[] : defaultValue;
-  } catch (e) {
-    console.error(`Failed to parse ${key} from localStorage`, e);
-    localStorage.removeItem(key); // Clear corrupted data
-    return defaultValue;
-  }
-};
-
-const processLeaderboardData = (
-  participants: Participant[],
-  scores: Score[]
-): LeaderboardEntry[] => {
-  const processedData = participants
-    .map((participant) => {
-      const participantScores = scores.filter((s) => s.participantId === participant.id);
-      if (participantScores.length === 0) return null;
-      const latestScore = participantScores.reduce((latest, current) =>
-        new Date(current.recordedAt) > new Date(latest.recordedAt) ? current : latest
-      );
-      return {
-        ...participant,
-        rank: 0, // Rank will be assigned after sorting
-        physicalTime: latestScore.physicalTime,
-        mentalTime: latestScore.mentalTime,
-        extraTime: latestScore.extraTime || 0,
-        weightedTotalTime: latestScore.weightedTotalTime,
-        scoreRecordedAt: latestScore.recordedAt,
-        gameTimes: latestScore.gameTimes,
-      };
-    })
-    .filter(Boolean) as LeaderboardEntry[];
-
-  processedData.sort((a, b) => a.weightedTotalTime - b.weightedTotalTime);
-  return processedData.map((entry, index) => ({ ...entry, rank: index + 1 }));
-};
-
 export default function DashboardPage() {
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [currentTime, setCurrentTime] = useState<Date>(new Date());
+  const [currentTime, setCurrentTime] = useState<string>(""); // Store as string to avoid hydration issues
 
   useEffect(() => {
-    const timerId = setInterval(() => setCurrentTime(new Date()), 1000);
+    // Set current time initially and then update every second
+    setCurrentTime(new Date().toLocaleTimeString());
+    const timerId = setInterval(() => setCurrentTime(new Date().toLocaleTimeString()), 1000);
     return () => clearInterval(timerId);
   }, []);
 
   const fetchData = () => {
     setLoading(true);
-    const participants = getStoredData<Participant>(PARTICIPANTS_STORAGE_KEY);
-    const scores = getStoredData<Score>(SCORES_STORAGE_KEY);
-    const games = getStoredData<Game>(GAMES_STORAGE_KEY);
-    const participantsMap = new Map(participants.map(p => [p.id, p]));
+    const participants = getStoredData<Participant>(PARTICIPANTS_STORAGE_KEY, []);
+    const scores = getStoredData<Score>(SCORES_STORAGE_KEY, []);
+    const games = getStoredData<Game>(GAMES_STORAGE_KEY, []);
+    const participantsMap = new Map(participants.map(p => [p.id, p.name]));
 
     const totalParticipants = participants.length;
     const totalGames = games.length;
@@ -89,9 +50,9 @@ export default function DashboardPage() {
     const leaderboard = processLeaderboardData(participants, scores);
     const topPerformers = leaderboard.slice(0, 3);
 
-    const latestScores = leaderboard.map(entry => entry.weightedTotalTime);
-    const averageWeightedTime = latestScores.length > 0 
-      ? latestScores.reduce((sum, time) => sum + time, 0) / latestScores.length 
+    const latestScoresTimes = leaderboard.map(entry => entry.weightedTotalTime);
+    const averageWeightedTime = latestScoresTimes.length > 0 
+      ? latestScoresTimes.reduce((sum, time) => sum + time, 0) / latestScoresTimes.length 
       : null;
 
     const recentScores = [...scores]
@@ -99,7 +60,7 @@ export default function DashboardPage() {
       .slice(0, 5)
       .map(score => ({
         ...score,
-        participantName: participantsMap.get(score.participantId)?.name || "Unknown",
+        participantName: participantsMap.get(score.participantId) || "Unknown",
       }));
 
     setDashboardData({
@@ -114,9 +75,8 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    fetchData(); // Initial fetch
+    fetchData(); 
     
-    // Listen for storage changes to re-fetch data
     const handleStorageChange = (event: StorageEvent) => {
       if (
         event.key === PARTICIPANTS_STORAGE_KEY ||
@@ -144,7 +104,7 @@ export default function DashboardPage() {
           </>
         ) : (
           <>
-            <div className="text-3xl font-bold text-foreground">{value ?? 'N/A'}</div>
+            <div className="text-3xl font-bold text-foreground">{value === null || value === undefined ? 'N/A' : value}</div>
             {description && <p className="text-xs text-muted-foreground pt-1">{description}</p>}
           </>
         )}
@@ -156,7 +116,7 @@ export default function DashboardPage() {
     <>
       <PageHeader
         title="Competition Dashboard"
-        description={`Overview of ChronoScore activities. Current time: ${currentTime.toLocaleTimeString()}`}
+        description={currentTime ? `Overview of ChronoScore activities. Current time: ${currentTime}` : "Loading time..."}
       />
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 mb-8">
@@ -176,7 +136,7 @@ export default function DashboardPage() {
         />
         <StatCard 
           title="Average Weighted Time" 
-          value={dashboardData?.averageWeightedTime !== null ? `${dashboardData?.averageWeightedTime?.toFixed(2)} min` : 'N/A'} 
+          value={dashboardData?.averageWeightedTime !== null && dashboardData?.averageWeightedTime !== undefined ? `${dashboardData.averageWeightedTime.toFixed(2)} min` : 'N/A'} 
           icon={Icons.Sigma}
           description="Avg. of latest weighted scores."
           isLoading={loading}

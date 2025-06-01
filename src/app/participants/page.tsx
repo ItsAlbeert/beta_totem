@@ -2,7 +2,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Image from "next/image";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -13,9 +12,7 @@ import { Button } from "@/components/ui/button";
 import type { Participant, Score } from "@/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-
-const PARTICIPANTS_STORAGE_KEY = "chronoScoreParticipants";
-const SCORES_STORAGE_KEY = "chronoScoreScores"; // For deleting associated scores
+import { getStoredData, storeData, PARTICIPANTS_STORAGE_KEY, SCORES_STORAGE_KEY } from "@/lib/storage";
 
 // Initial mock data if localStorage is empty
 const initialMockParticipants: Participant[] = [
@@ -26,51 +23,6 @@ const initialMockParticipants: Participant[] = [
   { id: "5", name: "Edward Scissorhands", year: 2 }, // No photo example
 ];
 
-const getStoredParticipants = (): Participant[] | null => {
-  if (typeof window !== 'undefined') {
-    const stored = localStorage.getItem(PARTICIPANTS_STORAGE_KEY);
-    if (stored) {
-      try {
-        return JSON.parse(stored) as Participant[];
-      } catch (e) {
-        console.error("Failed to parse participants from localStorage", e);
-        localStorage.removeItem(PARTICIPANTS_STORAGE_KEY);
-        return null;
-      }
-    }
-  }
-  return null;
-};
-
-const storeParticipants = (participants: Participant[]) => {
-  if (typeof window !== 'undefined') {
-    localStorage.setItem(PARTICIPANTS_STORAGE_KEY, JSON.stringify(participants));
-  }
-};
-
-const getStoredScores = (): Score[] => {
-  if (typeof window !== 'undefined') {
-    const stored = localStorage.getItem(SCORES_STORAGE_KEY);
-    if (stored) {
-      try {
-        return JSON.parse(stored) as Score[];
-      } catch (e) {
-        console.error("Failed to parse scores from localStorage", e);
-        localStorage.removeItem(SCORES_STORAGE_KEY);
-        return [];
-      }
-    }
-  }
-  return [];
-};
-
-const storeScores = (scores: Score[]) => {
-  if (typeof window !== 'undefined') {
-    localStorage.setItem(SCORES_STORAGE_KEY, JSON.stringify(scores));
-  }
-};
-
-
 export default function ParticipantsPage() {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,17 +32,16 @@ export default function ParticipantsPage() {
   const { toast } = useToast();
 
   useEffect(() => {
-    const storedParticipants = getStoredParticipants();
-    if (storedParticipants && storedParticipants.length > 0) {
+    const storedParticipants = getStoredData<Participant>(PARTICIPANTS_STORAGE_KEY, []);
+    if (storedParticipants.length > 0) {
       setParticipants(storedParticipants);
     } else {
-      // If no participants in localStorage, initialize with mocks and store them
-      // Only do this if localStorage is genuinely empty or unparsable for participants
-      if (!localStorage.getItem(PARTICIPANTS_STORAGE_KEY)) {
+      // Only init with mocks if local storage for participants is truly empty (key does not exist)
+      if (localStorage.getItem(PARTICIPANTS_STORAGE_KEY) === null) {
         setParticipants(initialMockParticipants);
-        storeParticipants(initialMockParticipants);
+        storeData<Participant>(PARTICIPANTS_STORAGE_KEY, initialMockParticipants);
       } else {
-        setParticipants([]); // if localStorage had something (maybe empty array string)
+        setParticipants([]); // if localStorage had something (maybe empty array string "[]")
       }
     }
     setLoading(false);
@@ -134,7 +85,7 @@ export default function ParticipantsPage() {
 
       setParticipants(prevParticipants => {
         const updatedParticipants = [...prevParticipants, finalNewParticipant];
-        storeParticipants(updatedParticipants);
+        storeData<Participant>(PARTICIPANTS_STORAGE_KEY, updatedParticipants);
         return updatedParticipants;
       });
 
@@ -174,14 +125,14 @@ export default function ParticipantsPage() {
     const participantToDelete = participants.find(p => p.id === participantId);
     setParticipants(prevParticipants => {
       const updatedParticipants = prevParticipants.filter(p => p.id !== participantId);
-      storeParticipants(updatedParticipants);
+      storeData<Participant>(PARTICIPANTS_STORAGE_KEY, updatedParticipants);
       return updatedParticipants;
     });
 
     // Also delete associated scores
-    const currentScores = getStoredScores();
+    const currentScores = getStoredData<Score>(SCORES_STORAGE_KEY, []);
     const updatedScores = currentScores.filter(score => score.participantId !== participantId);
-    storeScores(updatedScores);
+    storeData<Score>(SCORES_STORAGE_KEY, updatedScores);
 
     toast({
       title: "Participant Deleted",

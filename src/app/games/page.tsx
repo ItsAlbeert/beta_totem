@@ -14,36 +14,13 @@ import type { Game, GameCategory } from "@/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { Puzzle } from "lucide-react";
-
-const GAMES_STORAGE_KEY = "chronoScoreGames";
+import { getStoredData, storeData, GAMES_STORAGE_KEY } from "@/lib/storage";
 
 const initialMockGames: Game[] = [
   { id: "game1", name: "Obstacle Course", description: "Navigate a series of physical challenges.", category: "Physical" },
   { id: "game2", name: "Logic Puzzles", description: "Solve a set of brain teasers.", category: "Mental" },
   { id: "game3", name: "Speed Bonus", description: "Complete a task under a tight time limit for bonus.", category: "Extra" },
 ];
-
-const getStoredGames = (): Game[] | null => {
-  if (typeof window !== 'undefined') {
-    const stored = localStorage.getItem(GAMES_STORAGE_KEY);
-    if (stored) {
-      try {
-        return JSON.parse(stored) as Game[];
-      } catch (e) {
-        console.error("Failed to parse games from localStorage", e);
-        localStorage.removeItem(GAMES_STORAGE_KEY);
-        return null;
-      }
-    }
-  }
-  return null;
-};
-
-const storeGames = (games: Game[]) => {
-  if (typeof window !== 'undefined') {
-    localStorage.setItem(GAMES_STORAGE_KEY, JSON.stringify(games));
-  }
-};
 
 export default function GamesPage() {
   const [games, setGames] = useState<Game[]>([]);
@@ -54,15 +31,16 @@ export default function GamesPage() {
   const { toast } = useToast();
 
   useEffect(() => {
-    const storedGames = getStoredGames();
-    if (storedGames && storedGames.length > 0) {
+    const storedGames = getStoredData<Game>(GAMES_STORAGE_KEY, []);
+    if (storedGames.length > 0) {
       setGames(storedGames);
     } else {
-      if (!localStorage.getItem(GAMES_STORAGE_KEY)) { // Only init with mocks if local storage for games is truly empty
+      // Only init with mocks if local storage for games is truly empty (key does not exist)
+      if (localStorage.getItem(GAMES_STORAGE_KEY) === null) {
         setGames(initialMockGames);
-        storeGames(initialMockGames);
+        storeData<Game>(GAMES_STORAGE_KEY, initialMockGames);
       } else {
-        setGames([]); // if localStorage had something (maybe empty array string)
+        setGames([]); // if localStorage had something (maybe empty array string "[]")
       }
     }
     setLoading(false);
@@ -88,7 +66,7 @@ export default function GamesPage() {
 
     setGames(prevGames => {
       const updatedGames = [...prevGames, newGame];
-      storeGames(updatedGames);
+      storeData<Game>(GAMES_STORAGE_KEY, updatedGames);
       return updatedGames;
     });
 
@@ -106,7 +84,7 @@ export default function GamesPage() {
     const gameToDelete = games.find(g => g.id === gameId);
     setGames(prevGames => {
       const updatedGames = prevGames.filter(g => g.id !== gameId);
-      storeGames(updatedGames);
+      storeData<Game>(GAMES_STORAGE_KEY, updatedGames);
       return updatedGames;
     });
     toast({
@@ -116,6 +94,8 @@ export default function GamesPage() {
     });
      // Note: This does not remove game times from existing scores.
      // That would require iterating through all scores and is a more complex operation.
+     // For now, we assume if a game is deleted, its times become orphaned in scores,
+     // or the UI for recording/displaying scores would simply not show inputs/data for deleted games.
   };
 
   return (
