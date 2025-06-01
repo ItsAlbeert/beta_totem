@@ -35,7 +35,7 @@ export async function getParticipants(): Promise<Participant[]> {
 }
 
 export async function addParticipant(participantData: Omit<Participant, "id">): Promise<Participant> {
-  const docRef = await addDoc(collection(db, PARTICIPANTS_COLLECTION), participantData);
+  const docRef = await addDoc(collection(db, PARTICIPIPANTS_COLLECTION), participantData);
   return { id: docRef.id, ...participantData };
 }
 
@@ -57,9 +57,23 @@ export async function deleteParticipant(participantId: string): Promise<void> {
 const GAMES_COLLECTION = "games";
 
 export async function getGames(): Promise<Game[]> {
-  const q = query(collection(db, GAMES_COLLECTION), orderBy("category"), orderBy("name"));
+  // Simplified Firestore query to order by name.
+  // Further sorting by category will be done client-side.
+  const q = query(collection(db, GAMES_COLLECTION), orderBy("name"));
   const snapshot = await getDocs(q);
-  return snapshot.docs.map(doc => mapDocToDataWithId<Game>(doc));
+  const gamesList = snapshot.docs.map(doc => mapDocToDataWithId<Game>(doc));
+
+  // Client-side sorting: first by category, then by name (which was pre-sorted by Firestore).
+  return gamesList.sort((a, b) => {
+    if (a.category < b.category) return -1;
+    if (a.category > b.category) return 1;
+    // If categories are the same, 'name' field is used for secondary sort.
+    // Since Firestore already sorted by name, this secondary sort might seem redundant,
+    // but it ensures correct order if names were identical or for full clarity.
+    if (a.name < b.name) return -1;
+    if (a.name > b.name) return 1;
+    return 0;
+  });
 }
 
 export async function addGame(gameData: Omit<Game, "id">): Promise<Game> {

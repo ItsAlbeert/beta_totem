@@ -6,13 +6,12 @@ import { getFirestore } from "firebase/firestore";
 // import { getStorage } from "firebase/storage"; // If you need Firebase Storage later
 
 const firebaseConfig = {
-  // IMPORTANT: Replace with your actual Firebase project configuration
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "YOUR_API_KEY",
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "YOUR_AUTH_DOMAIN",
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "YOUR_PROJECT_ID",
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "YOUR_STORAGE_BUCKET",
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "YOUR_MESSAGING_SENDER_ID",
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "YOUR_APP_ID"
+  apiKey: "AIzaSyAhp_WpgbS4ugo8QO9wII5-D05Y0-_kGEI",
+  authDomain: "chronoscore.firebaseapp.com",
+  projectId: "chronoscore",
+  storageBucket: "chronoscore.firebasestorage.app",
+  messagingSenderId: "71560687267",
+  appId: "1:71560687267:web:7cb87030f8ca496ad25916"
 };
 
 // Initialize Firebase
