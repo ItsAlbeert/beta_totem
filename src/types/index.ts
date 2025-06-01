@@ -9,7 +9,7 @@ export interface Game {
 }
 
 export interface Participant {
-  id: string;
+  id:string;
   name: string;
   year: 1 | 2 | 3;
   photoUrl?: string;
@@ -32,25 +32,39 @@ export interface LeaderboardEntry extends Participant {
   physicalTime: number;
   mentalTime: number;
   extraTime?: number;
-  gameTimes?: { [gameId: string]: number }; // Explicitly add gameTimes here
+  gameTimes?: { [gameId: string]: number };
   weightedTotalTime: number;
   scoreRecordedAt: string; // To know when this score was from
 }
 
-// For trends page, simplified to plot values over time (timestamps of recordings)
-export interface TrendDataPoint {
-  time: string; // Formatted timestamp of when the score was recorded
+// For Participant Performance Over Time (Line Chart in Comparisons)
+// X-axis: time (recordedAt), Series: participant names, Values: score (e.g., weightedTotalTime)
+export interface PerformanceOverTimeDataPoint {
+  time: string; // Formatted timestamp (e.g., "MMM d, HH:mm")
   [participantName: string]: number | string | null; // participantName: scoreValue
 }
 
-// The config for charts remains the same
+// For Single Metric Bar Charts (e.g., Total Physical Time per Participant, or Single Game Time per Participant)
+// X-axis: participant names, Y-axis: score
+export interface SingleMetricDataPoint {
+  name: string; // Participant name
+  score: number | null; // The metric value (e.g., physical time, game time)
+}
+
+// For Multi-Metric Grouped Bar Charts (e.g., Comparing multiple games for all participants)
+// X-axis: participant names, Grouped Bars: selected games, Y-axis: score
+export interface MultiMetricDataPoint {
+  name: string; // Participant name
+  [gameName: string]: number | string | null | undefined; // gameName: scoreValue for that game
+}
+
+
 export interface ChartConfig {
   [k: string]: {
     label?: React.ReactNode;
     icon?: React.ComponentType;
   } & (
     | { color?: string; theme?: never }
-    | { color?: never; theme: Record<string, string> } // Adjusted theme type
+    | { color?: never; theme: Record<string, string> }
   );
 }
-
