@@ -1,7 +1,8 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -9,41 +10,67 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import type { Participant, Score } from "@/types";
+import type { Participant } from "@/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { getStoredData, storeData, PARTICIPANTS_STORAGE_KEY, SCORES_STORAGE_KEY } from "@/lib/storage";
-
-const initialMockParticipants: Participant[] = [
-  { id: "1", name: "Alice Wonderland", year: 1, photoUrl: "https://placehold.co/64x64.png" },
-  { id: "2", name: "Bob The Builder", year: 2, photoUrl: "https://placehold.co/64x64.png" },
-  { id: "3", name: "Charlie Chaplin", year: 3, photoUrl: "https://placehold.co/64x64.png" },
-  { id: "4", name: "Diana Prince", year: 1, photoUrl: "https://placehold.co/64x64.png" },
-  { id: "5", name: "Edward Scissorhands", year: 2 }, 
-];
+import { getParticipants, addParticipant, deleteParticipant } from "@/lib/firestore-services";
 
 export default function ParticipantsPage() {
-  const [participants, setParticipants] = useState<Participant[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
   const [newName, setNewName] = useState("");
   const [newYear, setNewYear] = useState<1 | 2 | 3 | "">(1);
   const [newPhoto, setNewPhoto] = useState<File | null>(null);
-  const { toast } = useToast();
 
-  useEffect(() => {
-    const storedParticipants = getStoredData<Participant>(PARTICIPANTS_STORAGE_KEY, []);
-    if (storedParticipants.length > 0) {
-      setParticipants(storedParticipants);
-    } else {
-      if (localStorage.getItem(PARTICIPANTS_STORAGE_KEY) === null) {
-        setParticipants(initialMockParticipants);
-        storeData<Participant>(PARTICIPANTS_STORAGE_KEY, initialMockParticipants);
-      } else {
-        setParticipants([]); 
-      }
-    }
-    setLoading(false);
-  }, []);
+  const { data: participants = [], isLoading: isLoadingParticipants } = useQuery<Participant[]>({
+    queryKey: ["participants"],
+    queryFn: getParticipants,
+  });
+
+  const addParticipantMutation = useMutation({
+    mutationFn: addParticipant,
+    onSuccess: (newParticipant) => {
+      queryClient.invalidateQueries({ queryKey: ["participants"] });
+      toast({
+        title: "Participant Added",
+        description: `${newParticipant.name} has been added.`,
+      });
+      setNewName("");
+      setNewYear(1);
+      setNewPhoto(null);
+      const fileInput = document.getElementById('photo') as HTMLInputElement;
+      if (fileInput) fileInput.value = "";
+    },
+    onError: (error) => {
+      toast({
+        title: "Error adding participant",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteParticipantMutation = useMutation({
+    mutationFn: deleteParticipant,
+    onSuccess: (_, deletedParticipantId) => {
+      queryClient.invalidateQueries({ queryKey: ["participants"] });
+      queryClient.invalidateQueries({ queryKey: ["scores"] }); // Scores might be linked
+      const deletedName = participants.find(p => p.id === deletedParticipantId)?.name || "Participant";
+      toast({
+        title: "Participant Deleted",
+        description: `${deletedName} and their scores have been removed.`,
+        variant: "destructive",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error deleting participant",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -67,43 +94,23 @@ export default function ParticipantsPage() {
         return;
     }
 
-    const newParticipantData: Omit<Participant, 'id' | 'photoUrl'> & { photoUrl?: string } = {
+    const participantData: Omit<Participant, 'id' | 'photoUrl'> & { photoUrl?: string } = {
       name: newName,
       year: numericYear as 1 | 2 | 3,
     };
     
-    const newId = Date.now().toString();
-
-    const processParticipantAddition = (photoDataUrl?: string) => {
-      const finalNewParticipant: Participant = {
-        id: newId,
-        ...newParticipantData,
+    const processAddition = (photoDataUrl?: string) => {
+      const finalParticipantData: Omit<Participant, 'id'> = {
+        ...participantData,
         ...(photoDataUrl && { photoUrl: photoDataUrl }),
       };
-
-      setParticipants(prevParticipants => {
-        const updatedParticipants = [...prevParticipants, finalNewParticipant];
-        storeData<Participant>(PARTICIPANTS_STORAGE_KEY, updatedParticipants);
-        return updatedParticipants;
-      });
-
-      toast({
-        title: "Participant Added",
-        description: `${finalNewParticipant.name} has been added.`,
-      });
-
-      setNewName("");
-      setNewYear(1);
-      setNewPhoto(null);
-      const fileInput = document.getElementById('photo') as HTMLInputElement;
-      if (fileInput) fileInput.value = ""; 
+      addParticipantMutation.mutate(finalParticipantData);
     };
-
 
     if (newPhoto) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        processParticipantAddition(reader.result as string);
+        processAddition(reader.result as string);
       };
       reader.onerror = () => {
         toast({
@@ -111,31 +118,16 @@ export default function ParticipantsPage() {
           description: "Could not read the photo file.",
           variant: "destructive",
         });
-         processParticipantAddition(); 
+         processAddition(); 
       };
       reader.readAsDataURL(newPhoto);
     } else {
-      processParticipantAddition();
+      processAddition();
     }
   };
 
   const handleDelete = (participantId: string) => {
-    const participantToDelete = participants.find(p => p.id === participantId);
-    setParticipants(prevParticipants => {
-      const updatedParticipants = prevParticipants.filter(p => p.id !== participantId);
-      storeData<Participant>(PARTICIPANTS_STORAGE_KEY, updatedParticipants);
-      return updatedParticipants;
-    });
-
-    const currentScores = getStoredData<Score>(SCORES_STORAGE_KEY, []);
-    const updatedScores = currentScores.filter(score => score.participantId !== participantId);
-    storeData<Score>(SCORES_STORAGE_KEY, updatedScores);
-
-    toast({
-      title: "Participant Deleted",
-      description: `${participantToDelete?.name || 'Participant'} and their scores have been removed.`,
-      variant: "destructive",
-    });
+    deleteParticipantMutation.mutate(participantId);
   };
 
   return (
@@ -163,6 +155,7 @@ export default function ParticipantsPage() {
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 required
+                disabled={addParticipantMutation.isPending}
               />
             </div>
             <div className="grid w-full max-w-sm items-center gap-1.5">
@@ -188,6 +181,7 @@ export default function ParticipantsPage() {
                 min="1"
                 max="3"
                 required
+                disabled={addParticipantMutation.isPending}
               />
             </div>
             <div className="grid w-full max-w-sm items-center gap-1.5">
@@ -197,9 +191,12 @@ export default function ParticipantsPage() {
                 id="photo"
                 onChange={(e) => setNewPhoto(e.target.files ? e.target.files[0] : null)}
                 accept="image/*"
+                disabled={addParticipantMutation.isPending}
               />
             </div>
-            <Button type="submit">Add Participant</Button>
+            <Button type="submit" disabled={addParticipantMutation.isPending}>
+              {addParticipantMutation.isPending ? "Adding..." : "Add Participant"}
+            </Button>
           </form>
         </CardContent>
       </Card>
@@ -212,7 +209,7 @@ export default function ParticipantsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {loading ? (
+          {isLoadingParticipants ? (
             <div className="space-y-4">
               {[...Array(3)].map((_, i) => (
                 <div key={i} className="flex items-center space-x-4 p-4 border rounded-md">
@@ -250,8 +247,9 @@ export default function ParticipantsPage() {
                         variant="destructive"
                         size="sm"
                         onClick={() => handleDelete(participant.id)}
+                        disabled={deleteParticipantMutation.isPending && deleteParticipantMutation.variables === participant.id}
                       >
-                        Delete
+                        {(deleteParticipantMutation.isPending && deleteParticipantMutation.variables === participant.id) ? "Deleting..." : "Delete"}
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -259,7 +257,7 @@ export default function ParticipantsPage() {
               </TableBody>
             </Table>
           )}
-           {participants.length === 0 && !loading && (
+           {participants.length === 0 && !isLoadingParticipants && (
             <p className="text-center text-muted-foreground py-8">No participants found. Add some using the form above!</p>
           )}
         </CardContent>

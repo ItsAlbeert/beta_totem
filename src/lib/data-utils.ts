@@ -4,7 +4,7 @@ import type { Participant, Score, LeaderboardEntry } from "@/types";
 
 export const processLeaderboardData = (
   participants: Participant[],
-  scores: Score[]
+  scores: Score[] // Scores now have recordedAt as ISO string from Firestore service
 ): LeaderboardEntry[] => {
   const processedData = participants
     .map((participant) => {
@@ -12,9 +12,12 @@ export const processLeaderboardData = (
       if (participantScores.length === 0) return null;
       
       // Find the latest score
-      const latestScore = participantScores.reduce((latest, current) =>
-        new Date(current.recordedAt).getTime() > new Date(latest.recordedAt).getTime() ? current : latest
-      );
+      const latestScore = participantScores.reduce((latest, current) => {
+        // Ensure recordedAt are actual Date objects for comparison
+        const latestDate = new Date(latest.recordedAt);
+        const currentDate = new Date(current.recordedAt);
+        return currentDate.getTime() > latestDate.getTime() ? current : latest;
+      });
       
       return {
         ...participant,
@@ -23,7 +26,7 @@ export const processLeaderboardData = (
         mentalTime: latestScore.mentalTime,
         extraTime: latestScore.extraTime || 0,
         weightedTotalTime: latestScore.weightedTotalTime,
-        scoreRecordedAt: latestScore.recordedAt,
+        scoreRecordedAt: latestScore.recordedAt, // This is already an ISO string
         gameTimes: latestScore.gameTimes,
       };
     })

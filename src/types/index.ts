@@ -12,18 +12,19 @@ export interface Participant {
   id:string;
   name: string;
   year: 1 | 2 | 3;
-  photoUrl?: string;
+  photoUrl?: string; // Stays as string, for data URL or Firebase Storage URL
 }
 
+// For data stored/retrieved from Firestore
 export interface Score {
-  id: string; // Unique ID for the score entry
+  id: string; // Firestore document ID
   participantId: string;
-  physicalTime: number; // Total physical time
-  mentalTime: number;   // Total mental time
-  extraTime?: number;    // Total extra time
-  gameTimes?: { [gameId: string]: number }; // Time for each specific game, gameId is key
+  physicalTime: number; 
+  mentalTime: number;   
+  extraTime?: number;    
+  gameTimes?: { [gameId: string]: number }; 
   weightedTotalTime: number;
-  recordedAt: string; // ISO string date
+  recordedAt: string; // ISO string date (converted from Firestore Timestamp)
 }
 
 // For leaderboard display, combining participant and their latest score details
@@ -34,28 +35,22 @@ export interface LeaderboardEntry extends Participant {
   extraTime?: number;
   gameTimes?: { [gameId: string]: number };
   weightedTotalTime: number;
-  scoreRecordedAt: string; // To know when this score was from
+  scoreRecordedAt: string; // ISO string
 }
 
-// For Participant Performance Over Time (Line Chart in Comparisons)
-// X-axis: time (recordedAt), Series: participant names, Values: score (e.g., weightedTotalTime)
 export interface PerformanceOverTimeDataPoint {
   time: string; // Formatted timestamp (e.g., "MMM d, HH:mm")
-  [participantName: string]: number | string | null; // participantName: scoreValue
+  [participantName: string]: number | string | null; 
 }
 
-// For Single Metric Bar Charts (e.g., Total Physical Time per Participant, or Single Game Time per Participant)
-// X-axis: participant names, Y-axis: score
 export interface SingleMetricDataPoint {
-  name: string; // Participant name
-  score: number | null; // The metric value (e.g., physical time, game time)
+  name: string; 
+  score: number | null; 
 }
 
-// For Multi-Metric Grouped Bar Charts (e.g., Comparing multiple games for all participants)
-// X-axis: participant names, Grouped Bars: selected games, Y-axis: score
 export interface MultiMetricDataPoint {
-  name: string; // Participant name
-  [gameName: string]: number | string | null | undefined; // gameName: scoreValue for that game
+  name: string; 
+  [gameName: string]: number | string | null | undefined; 
 }
 
 

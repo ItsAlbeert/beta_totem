@@ -1,7 +1,8 @@
 
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useState, useMemo, useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -11,19 +12,33 @@ import { ArrowDownUp, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { getStoredData, PARTICIPANTS_STORAGE_KEY, SCORES_STORAGE_KEY, GAMES_STORAGE_KEY } from "@/lib/storage";
+import { getParticipants, getScores, getGames } from "@/lib/firestore-services";
 import { processLeaderboardData } from "@/lib/data-utils";
 
 type SortableColumn = keyof Pick<LeaderboardEntry, 'rank' | 'name' | 'year' | 'physicalTime' | 'mentalTime' | 'extraTime' | 'weightedTotalTime'>;
 type SortDirection = 'asc' | 'desc';
 
 export default function LeaderboardPage() {
-  const [leaderboardData, setLeaderboardData] = useState<LeaderboardEntry[]>([]);
-  const [allGames, setAllGames] = useState<Game[]>([]);
-  const [loading, setLoading] = useState(true);
   const [sortColumn, setSortColumn] = useState<SortableColumn>('rank');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [expandedParticipantId, setExpandedParticipantId] = useState<string | null>(null);
+
+  const { data: participants = [], isLoading: isLoadingParticipants } = useQuery<Participant[]>({
+    queryKey: ["participants"],
+    queryFn: getParticipants,
+  });
+
+  const { data: scores = [], isLoading: isLoadingScores } = useQuery<Score[]>({
+    queryKey: ["scores"],
+    queryFn: getScores,
+  });
+  
+  const { data: games = [], isLoading: isLoadingGames } = useQuery<Game[]>({
+    queryKey: ["games"],
+    queryFn: getGames,
+  });
+
+  const isLoadingOverall = isLoadingParticipants || isLoadingScores || isLoadingGames;
 
   const applySort = useCallback((data: LeaderboardEntry[], column: SortableColumn, direction: SortDirection) => {
     if(data.length === 0) return data;
@@ -41,38 +56,13 @@ export default function LeaderboardPage() {
       return direction === 'asc' ? (valA as number) - (valB as number) : (valB as number) - (valA as number);
     });
   }, []);
+  
+  const leaderboardData = useMemo(() => {
+    if (isLoadingOverall || !participants.length || !scores.length) return [];
+    const processed = processLeaderboardData(participants, scores);
+    return applySort(processed, sortColumn, sortDirection);
+  }, [participants, scores, isLoadingOverall, sortColumn, sortDirection, applySort]);
 
-  const fetchDataAndProcess = useCallback(() => {
-    setLoading(true);
-    const participants = getStoredData<Participant>(PARTICIPANTS_STORAGE_KEY, []);
-    const scores = getStoredData<Score>(SCORES_STORAGE_KEY, []);
-    const games = getStoredData<Game>(GAMES_STORAGE_KEY, []);
-    setAllGames(games);
-    
-    const rankedData = processLeaderboardData(participants, scores);
-    const sortedData = applySort(rankedData, sortColumn, sortDirection);
-    setLeaderboardData(sortedData);
-    
-    setLoading(false);
-  }, [sortColumn, sortDirection, applySort]);
-
-  useEffect(() => {
-    fetchDataAndProcess();
-
-    const handleStorageChange = (event: StorageEvent) => {
-      if (
-        event.key === PARTICIPANTS_STORAGE_KEY ||
-        event.key === SCORES_STORAGE_KEY ||
-        event.key === GAMES_STORAGE_KEY
-      ) {
-        fetchDataAndProcess();
-        setExpandedParticipantId(null); 
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, [fetchDataAndProcess]);
 
   const handleSort = (column: SortableColumn) => {
     let direction = sortDirection;
@@ -81,13 +71,9 @@ export default function LeaderboardPage() {
     } else {
       direction = 'asc';
     }
-    
     setSortColumn(column);
     setSortDirection(direction);
     setExpandedParticipantId(null); 
-
-    const sortedData = applySort(leaderboardData, column, direction);
-    setLeaderboardData(sortedData);
   };
 
   const toggleExpandParticipant = (participantId: string) => {
@@ -116,7 +102,7 @@ export default function LeaderboardPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {loading && leaderboardData.length === 0 ? (
+          {isLoadingOverall ? (
             <div className="space-y-2">
               <Skeleton className="h-12 w-full" />
               {[...Array(5)].map((_, i) => (
@@ -184,7 +170,7 @@ export default function LeaderboardPage() {
                             {(['Physical', 'Mental', 'Extra'] as GameCategory[]).map(category => {
                               const categoryGames = Object.entries(entry.gameTimes || {})
                                 .map(([gameId, time]) => {
-                                  const gameDetails = allGames.find(g => g.id === gameId);
+                                  const gameDetails = games.find(g => g.id === gameId);
                                   if (gameDetails && gameDetails.category === category && typeof time === 'number') {
                                     return { name: gameDetails.name, time };
                                   }
@@ -217,7 +203,7 @@ export default function LeaderboardPage() {
               </TableBody>
             </Table>
           )}
-          {leaderboardData.length === 0 && !loading && (
+          {leaderboardData.length === 0 && !isLoadingOverall && (
             <p className="text-center text-muted-foreground py-8">No leaderboard data available. Add participants and record their times.</p>
           )}
         </CardContent>

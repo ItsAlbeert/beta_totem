@@ -1,7 +1,8 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -14,36 +15,61 @@ import type { Game, GameCategory } from "@/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { Puzzle } from "lucide-react";
-import { getStoredData, storeData, GAMES_STORAGE_KEY } from "@/lib/storage";
-
-const initialMockGames: Game[] = [
-  { id: "game1", name: "Obstacle Course", description: "Navigate a series of physical challenges.", category: "Physical" },
-  { id: "game2", name: "Logic Puzzles", description: "Solve a set of brain teasers.", category: "Mental" },
-  { id: "game3", name: "Speed Bonus", description: "Complete a task under a tight time limit for bonus.", category: "Extra" },
-];
+import { getGames, addGame, deleteGame } from "@/lib/firestore-services";
 
 export default function GamesPage() {
-  const [games, setGames] = useState<Game[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
   const [newGameName, setNewGameName] = useState("");
   const [newGameDescription, setNewGameDescription] = useState("");
   const [newGameCategory, setNewGameCategory] = useState<GameCategory>("Physical");
-  const { toast } = useToast();
 
-  useEffect(() => {
-    const storedGames = getStoredData<Game>(GAMES_STORAGE_KEY, []);
-    if (storedGames.length > 0) {
-      setGames(storedGames);
-    } else {
-      if (localStorage.getItem(GAMES_STORAGE_KEY) === null) {
-        setGames(initialMockGames);
-        storeData<Game>(GAMES_STORAGE_KEY, initialMockGames);
-      } else {
-        setGames([]); 
-      }
-    }
-    setLoading(false);
-  }, []);
+  const { data: games = [], isLoading: isLoadingGames } = useQuery<Game[]>({
+    queryKey: ["games"],
+    queryFn: getGames,
+  });
+
+  const addGameMutation = useMutation({
+    mutationFn: addGame,
+    onSuccess: (newGame) => {
+      queryClient.invalidateQueries({ queryKey: ["games"] });
+      toast({
+        title: "Game Added",
+        description: `${newGame.name} has been added to the ${newGame.category} category.`,
+      });
+      setNewGameName("");
+      setNewGameDescription("");
+      setNewGameCategory("Physical");
+    },
+    onError: (error) => {
+      toast({
+        title: "Error adding game",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteGameMutation = useMutation({
+    mutationFn: deleteGame,
+    onSuccess: (_, deletedGameId) => {
+      queryClient.invalidateQueries({ queryKey: ["games"] });
+      const deletedName = games.find(g => g.id === deletedGameId)?.name || "Game";
+      toast({
+        title: "Game Deleted",
+        description: `${deletedName} has been removed.`,
+        variant: "destructive",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error deleting game",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -56,41 +82,16 @@ export default function GamesPage() {
       return;
     }
 
-    const newGame: Game = {
-      id: Date.now().toString(),
+    const newGameData: Omit<Game, "id"> = {
       name: newGameName,
       description: newGameDescription,
       category: newGameCategory,
     };
-
-    setGames(prevGames => {
-      const updatedGames = [...prevGames, newGame];
-      storeData<Game>(GAMES_STORAGE_KEY, updatedGames);
-      return updatedGames;
-    });
-
-    toast({
-      title: "Game Added",
-      description: `${newGame.name} has been added to the ${newGame.category} category.`,
-    });
-
-    setNewGameName("");
-    setNewGameDescription("");
-    setNewGameCategory("Physical");
+    addGameMutation.mutate(newGameData);
   };
 
   const handleDelete = (gameId: string) => {
-    const gameToDelete = games.find(g => g.id === gameId);
-    setGames(prevGames => {
-      const updatedGames = prevGames.filter(g => g.id !== gameId);
-      storeData<Game>(GAMES_STORAGE_KEY, updatedGames);
-      return updatedGames;
-    });
-    toast({
-      title: "Game Deleted",
-      description: `${gameToDelete?.name || 'Game'} has been removed.`,
-      variant: "destructive",
-    });
+    deleteGameMutation.mutate(gameId);
   };
 
   return (
@@ -120,6 +121,7 @@ export default function GamesPage() {
                 value={newGameName}
                 onChange={(e) => setNewGameName(e.target.value)}
                 required
+                disabled={addGameMutation.isPending}
               />
             </div>
             <div className="grid w-full max-w-sm items-center gap-1.5">
@@ -129,11 +131,16 @@ export default function GamesPage() {
                 placeholder="Brief description of the game"
                 value={newGameDescription}
                 onChange={(e) => setNewGameDescription(e.target.value)}
+                disabled={addGameMutation.isPending}
               />
             </div>
             <div className="grid w-full max-w-sm items-center gap-1.5">
               <Label htmlFor="gameCategory">Category</Label>
-              <Select value={newGameCategory} onValueChange={(value) => setNewGameCategory(value as GameCategory)}>
+              <Select 
+                value={newGameCategory} 
+                onValueChange={(value) => setNewGameCategory(value as GameCategory)}
+                disabled={addGameMutation.isPending}
+              >
                 <SelectTrigger id="gameCategory">
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
@@ -144,7 +151,9 @@ export default function GamesPage() {
                 </SelectContent>
               </Select>
             </div>
-            <Button type="submit">Add Game</Button>
+            <Button type="submit" disabled={addGameMutation.isPending}>
+              {addGameMutation.isPending ? "Adding..." : "Add Game"}
+            </Button>
           </form>
         </CardContent>
       </Card>
@@ -157,7 +166,7 @@ export default function GamesPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {loading ? (
+          {isLoadingGames ? (
             <div className="space-y-4">
               {[...Array(3)].map((_, i) => (
                 <div key={i} className="flex items-center space-x-4 p-4 border rounded-md">
@@ -190,8 +199,9 @@ export default function GamesPage() {
                         variant="destructive"
                         size="sm"
                         onClick={() => handleDelete(game.id)}
+                        disabled={deleteGameMutation.isPending && deleteGameMutation.variables === game.id}
                       >
-                        Delete
+                        {(deleteGameMutation.isPending && deleteGameMutation.variables === game.id) ? "Deleting..." : "Delete"}
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -199,7 +209,7 @@ export default function GamesPage() {
               </TableBody>
             </Table>
           )}
-           {games.length === 0 && !loading && (
+           {games.length === 0 && !isLoadingGames && (
             <p className="text-center text-muted-foreground py-8">No games found. Add some using the form above!</p>
           )}
         </CardContent>

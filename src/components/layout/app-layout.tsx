@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import React from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { Icons } from "@/components/icons";
 import {
@@ -29,6 +30,9 @@ import { Button } from "@/components/ui/button";
 interface AppLayoutProps {
   children: React.ReactNode;
 }
+
+// Create a client
+const queryClient = new QueryClient();
 
 function SidebarBrand() {
   const { open } = useSidebar();
@@ -96,32 +100,34 @@ export function AppLayout({ children }: AppLayoutProps) {
   const pathname = usePathname();
 
   return (
-    <SidebarProvider defaultOpen>
-      <Sidebar>
-        <SidebarHeader>
-          <SidebarBrand />
-        </SidebarHeader>
-        <SidebarContent>
-          <NavMenu items={primaryNav} currentPath={pathname} />
-        </SidebarContent>
-        <SidebarFooter className="group-data-[collapsible=icon]:hidden">
-          {/* Footer content if any, e.g., user profile */}
-        </SidebarFooter>
-      </Sidebar>
-      <SidebarInset className="flex flex-col">
-        <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b bg-background/80 px-4 backdrop-blur-sm md:px-6">
-          <div className="flex items-center">
-            <SidebarTrigger className="md:hidden" />
-            {/* Add breadcrumbs or page title here if needed */}
-          </div>
-          {/* Add user menu or other header actions here */}
-          <Button variant="outline" size="sm">User Profile</Button>
-        </header>
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
-          {children}
-        </main>
-        <Toaster />
-      </SidebarInset>
-    </SidebarProvider>
+    <QueryClientProvider client={queryClient}>
+      <SidebarProvider defaultOpen>
+        <Sidebar>
+          <SidebarHeader>
+            <SidebarBrand />
+          </SidebarHeader>
+          <SidebarContent>
+            <NavMenu items={primaryNav} currentPath={pathname} />
+          </SidebarContent>
+          <SidebarFooter className="group-data-[collapsible=icon]:hidden">
+            {/* Footer content if any, e.g., user profile */}
+          </SidebarFooter>
+        </Sidebar>
+        <SidebarInset className="flex flex-col">
+          <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b bg-background/80 px-4 backdrop-blur-sm md:px-6">
+            <div className="flex items-center">
+              <SidebarTrigger className="md:hidden" />
+              {/* Add breadcrumbs or page title here if needed */}
+            </div>
+            {/* Add user menu or other header actions here */}
+            <Button variant="outline" size="sm">User Profile</Button>
+          </header>
+          <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
+            {children}
+          </main>
+          <Toaster />
+        </SidebarInset>
+      </SidebarProvider>
+    </QueryClientProvider>
   );
 }

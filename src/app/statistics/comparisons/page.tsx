@@ -1,7 +1,8 @@
 
 "use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -18,7 +19,7 @@ import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Responsive
 import { Skeleton } from "@/components/ui/skeleton";
 import { format, parseISO } from 'date-fns';
 import { cn } from "@/lib/utils";
-import { getStoredData, PARTICIPANTS_STORAGE_KEY, SCORES_STORAGE_KEY, GAMES_STORAGE_KEY } from "@/lib/storage";
+import { getParticipants, getScores, getGames } from "@/lib/firestore-services";
 
 const chartColors = [
   "hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))",
@@ -37,16 +38,28 @@ interface ProcessedPageData {
 }
 
 export default function ComparisonsPage() {
-  const [loading, setLoading] = useState(true);
-  const [processedData, setProcessedData] = useState<ProcessedPageData | null>(null);
   const [selectedParticipantIdsForComparison, setSelectedParticipantIdsForComparison] = useState<string[]>([]);
   const [selectedGameIdsForComparison, setSelectedGameIdsForComparison] = useState<string[]>([]);
 
-  const fetchData = useCallback(() => {
-    setLoading(true);
-    const participants = getStoredData<Participant>(PARTICIPANTS_STORAGE_KEY, []);
-    const scores = getStoredData<Score>(SCORES_STORAGE_KEY, []);
-    const games = getStoredData<Game>(GAMES_STORAGE_KEY, []);
+  const { data: participants = [], isLoading: isLoadingParticipants } = useQuery<Participant[]>({
+    queryKey: ["participants"],
+    queryFn: getParticipants,
+  });
+
+  const { data: scores = [], isLoading: isLoadingScores } = useQuery<Score[]>({
+    queryKey: ["scores"],
+    queryFn: getScores,
+  });
+
+  const { data: games = [], isLoading: isLoadingGames } = useQuery<Game[]>({
+    queryKey: ["games"],
+    queryFn: getGames,
+  });
+
+  const isLoadingOverall = isLoadingParticipants || isLoadingScores || isLoadingGames;
+
+  const processedData = useMemo((): ProcessedPageData | null => {
+    if (isLoadingOverall) return null;
 
     const participantsMap = new Map(participants.map(p => [p.id, p]));
     const gamesMap = new Map(games.map(g => [g.id, g]));
@@ -58,25 +71,9 @@ export default function ComparisonsPage() {
         latestScoresMap.set(score.participantId, score);
       }
     });
+    return { participants, scores, games, participantsMap, gamesMap, latestScoresMap };
+  }, [participants, scores, games, isLoadingOverall]);
 
-    setProcessedData({ participants, scores, games, participantsMap, gamesMap, latestScoresMap });
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    fetchData();
-    const handleStorageChange = (event: StorageEvent) => {
-      if (
-        event.key === PARTICIPANTS_STORAGE_KEY ||
-        event.key === SCORES_STORAGE_KEY ||
-        event.key === GAMES_STORAGE_KEY
-      ) {
-        fetchData();
-      }
-    };
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, [fetchData]);
 
   const handleParticipantSelection = (participantId: string, checked: boolean) => {
     setSelectedParticipantIdsForComparison(prev =>
@@ -97,7 +94,6 @@ export default function ComparisonsPage() {
     const relevantScores = scores.filter(score => selectedParticipantIdsForComparison.includes(score.participantId));
     if (relevantScores.length === 0) return { chartData: [], chartConfig: {} };
     
-    // Collect all unique timestamps from relevant scores
     const allTimestamps = Array.from(new Set(relevantScores.map(s => parseISO(s.recordedAt).getTime()))).sort();
 
     const chartData: PerformanceOverTimeDataPoint[] = allTimestamps.map(ts => {
@@ -107,7 +103,6 @@ export default function ComparisonsPage() {
         
         selectedParticipantIdsForComparison.forEach(pid => {
             const participantName = participantsMap.get(pid)?.name || pid;
-            // Find score for this participant at this specific timestamp
             const scoreAtTime = relevantScores.find(s => 
                 s.participantId === pid && parseISO(s.recordedAt).getTime() === ts
             );
@@ -144,15 +139,15 @@ export default function ComparisonsPage() {
     
     const chartConfig: ChartConfig = {};
     selectedGames.forEach((game, index) => {
-      chartConfig[game.name] = { label: game.name, color: getColor(index + selectedParticipantIdsForComparison.length) }; // Offset color index
+      chartConfig[game.name] = { label: game.name, color: getColor(index + selectedParticipantIdsForComparison.length) };
     });
 
     return { chartData, chartConfig };
   }, [processedData, selectedGameIdsForComparison, selectedParticipantIdsForComparison.length]);
 
   const renderLineChart = (title: string, description: string, data: PerformanceOverTimeDataPoint[], config: ChartConfig, yAxisLabel: string = "Time (min)") => {
-    if (loading && data.length === 0 && selectedParticipantIdsForComparison.length === 0) return <Skeleton className="h-[400px] w-full shadow-lg" />;
-    if (!loading && selectedParticipantIdsForComparison.length > 0 && data.length === 0) return <p className="text-center text-muted-foreground py-8">No recorded scores for selected participant(s).</p>;
+    if (isLoadingOverall && data.length === 0 && selectedParticipantIdsForComparison.length === 0) return <Skeleton className="h-[400px] w-full shadow-lg" />;
+    if (!isLoadingOverall && selectedParticipantIdsForComparison.length > 0 && data.length === 0) return <p className="text-center text-muted-foreground py-8">No recorded scores for selected participant(s).</p>;
     if (selectedParticipantIdsForComparison.length === 0) return <p className="text-center text-muted-foreground py-8">Select participants to compare.</p>;
     
     return (
@@ -182,8 +177,8 @@ export default function ComparisonsPage() {
   };
 
   const renderGroupedBarChart = (title: string, description: string, data: MultiMetricDataPoint[], config: ChartConfig, yAxisLabel: string = "Time (min)") => {
-    if (loading && data.length === 0 && selectedGameIdsForComparison.length === 0) return <Skeleton className="h-[400px] w-full shadow-lg" />;
-    if (!loading && selectedGameIdsForComparison.length > 0 && data.length === 0 ) return <p className="text-center text-muted-foreground py-8">No data for selected games or participants with scores in those games.</p>;
+    if (isLoadingOverall && data.length === 0 && selectedGameIdsForComparison.length === 0) return <Skeleton className="h-[400px] w-full shadow-lg" />;
+    if (!isLoadingOverall && selectedGameIdsForComparison.length > 0 && data.length === 0 ) return <p className="text-center text-muted-foreground py-8">No data for selected games or participants with scores in those games.</p>;
     if (selectedGameIdsForComparison.length === 0) return <p className="text-center text-muted-foreground py-8">Select games to compare.</p>;
 
     return (
@@ -219,7 +214,7 @@ export default function ComparisonsPage() {
         description="Select participants or games below for specific comparisons."
       />
       
-      {loading && !processedData ? (
+      {isLoadingOverall && !processedData ? (
         <div className="space-y-8">
             <Skeleton className="h-[600px] w-full shadow-lg" />
             <Skeleton className="h-[600px] w-full shadow-lg" />

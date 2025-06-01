@@ -1,7 +1,8 @@
 
 "use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react";
+import React, { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
@@ -13,7 +14,7 @@ import type { ChartConfig, Participant, Score, Game, GameCategory, SingleMetricD
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { getStoredData, PARTICIPANTS_STORAGE_KEY, SCORES_STORAGE_KEY, GAMES_STORAGE_KEY } from "@/lib/storage";
+import { getParticipants, getScores, getGames } from "@/lib/firestore-services";
 
 const chartColors = [
   "hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))",
@@ -32,14 +33,25 @@ interface ProcessedPageData {
 }
 
 export default function TrendsPage() {
-  const [loading, setLoading] = useState(true);
-  const [processedData, setProcessedData] = useState<ProcessedPageData | null>(null);
+  const { data: participants = [], isLoading: isLoadingParticipants } = useQuery<Participant[]>({
+    queryKey: ["participants"],
+    queryFn: getParticipants,
+  });
 
-  const fetchData = useCallback(() => {
-    setLoading(true);
-    const participants = getStoredData<Participant>(PARTICIPANTS_STORAGE_KEY, []);
-    const scores = getStoredData<Score>(SCORES_STORAGE_KEY, []);
-    const games = getStoredData<Game>(GAMES_STORAGE_KEY, []);
+  const { data: scores = [], isLoading: isLoadingScores } = useQuery<Score[]>({
+    queryKey: ["scores"],
+    queryFn: getScores,
+  });
+
+  const { data: games = [], isLoading: isLoadingGames } = useQuery<Game[]>({
+    queryKey: ["games"],
+    queryFn: getGames,
+  });
+
+  const isLoadingOverall = isLoadingParticipants || isLoadingScores || isLoadingGames;
+
+  const processedData = useMemo((): ProcessedPageData | null => {
+    if (isLoadingOverall) return null;
 
     const participantsMap = new Map(participants.map(p => [p.id, p]));
     const gamesMap = new Map(games.map(g => [g.id, g]));
@@ -51,25 +63,8 @@ export default function TrendsPage() {
         latestScoresMap.set(score.participantId, score);
       }
     });
-
-    setProcessedData({ participants, scores, games, latestScoresMap, participantsMap, gamesMap });
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    fetchData();
-    const handleStorageChange = (event: StorageEvent) => {
-      if (
-        event.key === PARTICIPANTS_STORAGE_KEY ||
-        event.key === SCORES_STORAGE_KEY ||
-        event.key === GAMES_STORAGE_KEY
-      ) {
-        fetchData();
-      }
-    };
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, [fetchData]);
+    return { participants, scores, games, latestScoresMap, participantsMap, gamesMap };
+  }, [participants, scores, games, isLoadingOverall]);
 
 
   const categoryTotalTimeChartData = useMemo(() => {
@@ -119,8 +114,8 @@ export default function TrendsPage() {
 
   const renderBarChart = (title: string, description: string, data: SingleMetricDataPoint[], dataKey: string = "score", yAxisLabel: string = "Time (min)", chartKeySuffix: string, mainChart: boolean = false) => {
     const chartUniqueKey = `chart-${chartKeySuffix}-${mainChart ? 'main' : 'sub'}`;
-    if (loading && data.length === 0) return <Skeleton className={cn(mainChart ? "h-[400px]" : "h-[300px]", "w-full shadow-lg")} key={`${chartUniqueKey}-skeleton`} />;
-    if (!loading && data.length === 0) return <p className="text-center text-muted-foreground py-4 col-span-full" key={`${chartUniqueKey}-nodata`}>No data available for this chart.</p>;
+    if (isLoadingOverall && data.length === 0) return <Skeleton className={cn(mainChart ? "h-[400px]" : "h-[300px]", "w-full shadow-lg")} key={`${chartUniqueKey}-skeleton`} />;
+    if (!isLoadingOverall && data.length === 0) return <p className="text-center text-muted-foreground py-4 col-span-full" key={`${chartUniqueKey}-nodata`}>No data available for this chart.</p>;
     
     const config: ChartConfig = { [dataKey]: { label: yAxisLabel, color: getColor(mainChart ? 0 : Math.floor(Math.random() * 5)) } };
 
@@ -156,10 +151,10 @@ export default function TrendsPage() {
   };
   
   const renderCategorySection = (category: GameCategory, title: string) => {
-    if (!processedData) return <Skeleton className="h-[600px] w-full mb-8 shadow-lg" key={`skeleton-cat-${category}`} />;
-    const { games } = processedData;
-    const categoryGames = games.filter(g => g.category === category);
-    const categoryTotalData = categoryTotalTimeChartData[category];
+    if (isLoadingOverall && !processedData) return <Skeleton className="h-[600px] w-full mb-8 shadow-lg" key={`skeleton-cat-${category}`} />;
+    
+    const categoryGames = processedData?.games.filter(g => g.category === category) || [];
+    const categoryTotalData = categoryTotalTimeChartData[category] || [];
     
     return (
       <div className="mb-12" key={`category-section-${category}`}>
@@ -193,7 +188,7 @@ export default function TrendsPage() {
             </div>
           </>
         )}
-         {categoryGames.length === 0 && !loading && ( 
+         {categoryGames.length === 0 && !isLoadingOverall && ( 
              <p className="text-center text-muted-foreground py-4 mt-6">No {category.toLowerCase()} games defined for this category.</p>
         )}
       </div>
@@ -208,7 +203,7 @@ export default function TrendsPage() {
         description="Analyze overall category performance and individual game scores based on latest results."
       />
       <div className="space-y-10">
-        {loading && !processedData ? (
+        {isLoadingOverall && !processedData ? (
           <>
             <Skeleton className="h-[600px] w-full mb-8 shadow-lg" key="skeleton-physical" />
             <Skeleton className="h-[600px] w-full mb-8 shadow-lg" key="skeleton-mental" />

@@ -26,9 +26,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 import { useToast } from "@/hooks/use-toast";
 import type { Participant, Score, Game, GameCategory } from "@/types";
-import { useState, useEffect } from "react";
 import { Separator } from "@/components/ui/separator";
-import { getStoredData, storeData, PARTICIPANTS_STORAGE_KEY, GAMES_STORAGE_KEY, SCORES_STORAGE_KEY } from "@/lib/storage";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { getParticipants, getGames, addScore } from "@/lib/firestore-services";
 
 const timeInputSchema = z.object({
   participantId: z.string().min(1, "Participant selection is required."),
@@ -49,8 +49,17 @@ type TimeInputFormValues = z.infer<typeof timeInputSchema>;
 
 export default function TimesPage() {
   const { toast } = useToast();
-  const [participants, setParticipants] = useState<Participant[]>([]);
-  const [games, setGames] = useState<Game[]>([]);
+  const queryClient = useQueryClient();
+
+  const { data: participants = [], isLoading: isLoadingParticipants } = useQuery<Participant[]>({
+    queryKey: ["participants"],
+    queryFn: getParticipants,
+  });
+
+  const { data: games = [], isLoading: isLoadingGames } = useQuery<Game[]>({
+    queryKey: ["games"],
+    queryFn: getGames,
+  });
 
   const form = useForm<TimeInputFormValues>({
     resolver: zodResolver(timeInputSchema),
@@ -63,36 +72,39 @@ export default function TimesPage() {
     },
   });
 
-  const loadInitialData = () => {
-    const storedParticipants = getStoredData<Participant>(PARTICIPANTS_STORAGE_KEY, []);
-    setParticipants(storedParticipants);
-    setGames(getStoredData<Game>(GAMES_STORAGE_KEY, []));
+  const addScoreMutation = useMutation({
+    mutationFn: addScore,
+    onSuccess: (newScore) => {
+      queryClient.invalidateQueries({ queryKey: ["scores"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboardData"] }); // If dashboard uses scores
+      queryClient.invalidateQueries({ queryKey: ["leaderboardData"] });
+      queryClient.invalidateQueries({ queryKey: ["trendsData"] });
+      queryClient.invalidateQueries({ queryKey: ["comparisonsData"] });
 
-    const currentSelectedId = form.getValues("participantId");
-    if (currentSelectedId && !storedParticipants.find(p => p.id === currentSelectedId)) {
-        form.resetField("participantId");
-        form.setValue("participantId", ""); 
-    }
-  };
-  
-  useEffect(() => {
-    loadInitialData();
 
-    const handleStorageChange = (event: StorageEvent) => {
-      if (event.key === PARTICIPANTS_STORAGE_KEY || event.key === GAMES_STORAGE_KEY) {
-        loadInitialData();
-      }
-    };
+      const participantName = participants.find(p => p.id === newScore.participantId)?.name || "Participant";
+      toast({
+        title: "Time Recorded Successfully!",
+        description: `Times for ${participantName} have been saved. Weighted total: ${newScore.weightedTotalTime.toFixed(2)} min.`,
+        variant: "default",
+      });
+      form.reset({ 
+        participantId: "",
+        physicalTime: 0,
+        mentalTime: 0,
+        extraTime: 0,
+        gameTimes: {},
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error recording time",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
-    if (typeof window !== 'undefined') {
-      window.addEventListener('storage', handleStorageChange);
-      window.addEventListener('focus', loadInitialData); 
-      return () => {
-        window.removeEventListener('storage', handleStorageChange);
-        window.removeEventListener('focus', loadInitialData);
-      };
-    }
-  }, [form]); 
 
   async function onSubmit(values: TimeInputFormValues) {
     const selectedParticipant = participants.find(p => p.id === values.participantId);
@@ -112,33 +124,17 @@ export default function TimesPage() {
 
     const weightedTotalTime = physicalTime + (mentalTime * 3) - extraTime;
 
-    const newScore: Score = {
-      id: Date.now().toString(),
+    const newScoreData: Omit<Score, "id" | "recordedAt"> & { recordedAt: Date } = {
       participantId: values.participantId,
       physicalTime: physicalTime,
       mentalTime: mentalTime,
       extraTime: extraTime,
       gameTimes: gameSpecificTimes,
       weightedTotalTime: weightedTotalTime,
-      recordedAt: new Date().toISOString(),
+      recordedAt: new Date(), // Current date for Firestore Timestamp
     };
-
-    const existingScores = getStoredData<Score>(SCORES_STORAGE_KEY, []);
-    const updatedScores = [...existingScores, newScore];
-    storeData<Score>(SCORES_STORAGE_KEY, updatedScores);
     
-    toast({
-      title: "Time Recorded Successfully!",
-      description: `Times for ${selectedParticipant.name} have been saved. Weighted total: ${weightedTotalTime.toFixed(2)} min.`,
-      variant: "default",
-    });
-    form.reset({ 
-      participantId: "",
-      physicalTime: 0,
-      mentalTime: 0,
-      extraTime: 0,
-      gameTimes: {},
-    });
+    addScoreMutation.mutate(newScoreData);
   }
 
   const renderGameTimeFields = (category: GameCategory) => {
@@ -163,7 +159,8 @@ export default function TimesPage() {
                     {...field} 
                     value={field.value ?? ''} 
                     onChange={e => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))} 
-                    step="any" 
+                    step="any"
+                    disabled={addScoreMutation.isPending || isLoadingGames}
                   />
                 </FormControl>
                 <FormMessage />
@@ -196,7 +193,8 @@ export default function TimesPage() {
                     <FormLabel>Participant</FormLabel>
                     <Select 
                       onValueChange={field.onChange} 
-                      value={field.value} 
+                      value={field.value}
+                      disabled={isLoadingParticipants || addScoreMutation.isPending}
                     >
                       <FormControl>
                         <SelectTrigger>
@@ -204,7 +202,8 @@ export default function TimesPage() {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {participants.length === 0 && (
+                        {isLoadingParticipants && <SelectItem value="loading" disabled>Loading participants...</SelectItem>}
+                        {!isLoadingParticipants && participants.length === 0 && (
                            <div className="p-4 text-sm text-muted-foreground text-center">
                              No participants found. Add participants on the Participants page.
                            </div>
@@ -230,7 +229,7 @@ export default function TimesPage() {
                   <FormItem>
                     <FormLabel>Total Physical Challenge Time (minutes)</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="e.g., 30" {...field} step="any" />
+                      <Input type="number" placeholder="e.g., 30" {...field} step="any" disabled={addScoreMutation.isPending} />
                     </FormControl>
                     <FormDescription>
                       Total time taken for all physical challenges.
@@ -250,7 +249,7 @@ export default function TimesPage() {
                   <FormItem>
                     <FormLabel>Total Mental Challenge Time (minutes)</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="e.g., 15" {...field} step="any"/>
+                      <Input type="number" placeholder="e.g., 15" {...field} step="any" disabled={addScoreMutation.isPending}/>
                     </FormControl>
                     <FormDescription>
                       Total time taken for all mental challenges.
@@ -270,7 +269,7 @@ export default function TimesPage() {
                   <FormItem>
                     <FormLabel>Total Extra Bonus Time (minutes, optional)</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="e.g., 5" {...field} step="any"/>
+                      <Input type="number" placeholder="e.g., 5" {...field} step="any" disabled={addScoreMutation.isPending}/>
                     </FormControl>
                     <FormDescription>
                       Total bonus time to be subtracted (e.g., for all extra tasks).
@@ -284,8 +283,12 @@ export default function TimesPage() {
               <Separator />
               
               <div className="flex justify-end">
-                <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled={form.formState.isSubmitting || participants.length === 0}>
-                  {form.formState.isSubmitting ? "Saving..." : "Save Times"}
+                <Button 
+                  type="submit" 
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground" 
+                  disabled={addScoreMutation.isPending || participants.length === 0 || isLoadingParticipants || isLoadingGames}
+                >
+                  {addScoreMutation.isPending ? "Saving..." : "Save Times"}
                 </Button>
               </div>
             </form>
