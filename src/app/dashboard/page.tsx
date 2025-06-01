@@ -27,10 +27,9 @@ interface DashboardData {
 export default function DashboardPage() {
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [currentTime, setCurrentTime] = useState<string>(""); // Store as string to avoid hydration issues
+  const [currentTime, setCurrentTime] = useState<string>(""); 
 
   useEffect(() => {
-    // Set current time initially and then update every second
     setCurrentTime(new Date().toLocaleTimeString());
     const timerId = setInterval(() => setCurrentTime(new Date().toLocaleTimeString()), 1000);
     return () => clearInterval(timerId);
@@ -176,7 +175,7 @@ export default function DashboardPage() {
                     </Avatar>
                     <div className="flex-1">
                       <p className="font-medium text-foreground">{performer.name}</p>
-                      <p className="text-sm text-muted-foreground">Weighted Time: {performer.weightedTotalTime} min</p>
+                      <p className="text-sm text-muted-foreground">Weighted Time: {performer.weightedTotalTime.toFixed(2)} min</p>
                     </div>
                   </li>
                 ))}
@@ -209,7 +208,7 @@ export default function DashboardPage() {
                           {score.participantName}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          Score: {score.weightedTotalTime} min
+                          Score: {score.weightedTotalTime.toFixed(2)} min
                         </p>
                       </div>
                       <p className="text-xs text-muted-foreground">

@@ -14,13 +14,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { getStoredData, storeData, PARTICIPANTS_STORAGE_KEY, SCORES_STORAGE_KEY } from "@/lib/storage";
 
-// Initial mock data if localStorage is empty
 const initialMockParticipants: Participant[] = [
   { id: "1", name: "Alice Wonderland", year: 1, photoUrl: "https://placehold.co/64x64.png" },
   { id: "2", name: "Bob The Builder", year: 2, photoUrl: "https://placehold.co/64x64.png" },
   { id: "3", name: "Charlie Chaplin", year: 3, photoUrl: "https://placehold.co/64x64.png" },
   { id: "4", name: "Diana Prince", year: 1, photoUrl: "https://placehold.co/64x64.png" },
-  { id: "5", name: "Edward Scissorhands", year: 2 }, // No photo example
+  { id: "5", name: "Edward Scissorhands", year: 2 }, 
 ];
 
 export default function ParticipantsPage() {
@@ -36,12 +35,11 @@ export default function ParticipantsPage() {
     if (storedParticipants.length > 0) {
       setParticipants(storedParticipants);
     } else {
-      // Only init with mocks if local storage for participants is truly empty (key does not exist)
       if (localStorage.getItem(PARTICIPANTS_STORAGE_KEY) === null) {
         setParticipants(initialMockParticipants);
         storeData<Participant>(PARTICIPANTS_STORAGE_KEY, initialMockParticipants);
       } else {
-        setParticipants([]); // if localStorage had something (maybe empty array string "[]")
+        setParticipants([]); 
       }
     }
     setLoading(false);
@@ -98,7 +96,7 @@ export default function ParticipantsPage() {
       setNewYear(1);
       setNewPhoto(null);
       const fileInput = document.getElementById('photo') as HTMLInputElement;
-      if (fileInput) fileInput.value = ""; // Reset file input
+      if (fileInput) fileInput.value = ""; 
     };
 
 
@@ -129,7 +127,6 @@ export default function ParticipantsPage() {
       return updatedParticipants;
     });
 
-    // Also delete associated scores
     const currentScores = getStoredData<Score>(SCORES_STORAGE_KEY, []);
     const updatedScores = currentScores.filter(score => score.participantId !== participantId);
     storeData<Score>(SCORES_STORAGE_KEY, updatedScores);
@@ -148,7 +145,7 @@ export default function ParticipantsPage() {
         description="View and manage registered participants in the competition."
       />
 
-      <Card className="shadow-lg mb-6">
+      <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 mb-6">
         <CardHeader>
           <CardTitle>Add New Participant</CardTitle>
           <CardDescription>
@@ -207,7 +204,7 @@ export default function ParticipantsPage() {
         </CardContent>
       </Card>
 
-      <Card className="shadow-lg">
+      <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
         <CardHeader>
           <CardTitle>Participant List</CardTitle>
           <CardDescription>

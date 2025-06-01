@@ -35,12 +35,11 @@ export default function GamesPage() {
     if (storedGames.length > 0) {
       setGames(storedGames);
     } else {
-      // Only init with mocks if local storage for games is truly empty (key does not exist)
       if (localStorage.getItem(GAMES_STORAGE_KEY) === null) {
         setGames(initialMockGames);
         storeData<Game>(GAMES_STORAGE_KEY, initialMockGames);
       } else {
-        setGames([]); // if localStorage had something (maybe empty array string "[]")
+        setGames([]); 
       }
     }
     setLoading(false);
@@ -92,10 +91,6 @@ export default function GamesPage() {
       description: `${gameToDelete?.name || 'Game'} has been removed.`,
       variant: "destructive",
     });
-     // Note: This does not remove game times from existing scores.
-     // That would require iterating through all scores and is a more complex operation.
-     // For now, we assume if a game is deleted, its times become orphaned in scores,
-     // or the UI for recording/displaying scores would simply not show inputs/data for deleted games.
   };
 
   return (
@@ -107,7 +102,7 @@ export default function GamesPage() {
         <Puzzle className="w-8 h-8 text-primary" />
       </PageHeader>
 
-      <Card className="shadow-lg mb-6">
+      <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 mb-6">
         <CardHeader>
           <CardTitle>Add New Game</CardTitle>
           <CardDescription>
@@ -154,7 +149,7 @@ export default function GamesPage() {
         </CardContent>
       </Card>
 
-      <Card className="shadow-lg">
+      <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
         <CardHeader>
           <CardTitle>Game List</CardTitle>
           <CardDescription>

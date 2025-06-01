@@ -6,10 +6,9 @@ export default {
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
-    "./src/lib/**/*.{js,ts,jsx,tsx,mdx}", // Agregado para utilidades
+    "./src/lib/**/*.{js,ts,jsx,tsx,mdx}", 
   ],
   theme: {
-    // Container configuration
     container: {
       center: true,
       padding: {
@@ -24,7 +23,6 @@ export default {
       },
     },
     extend: {
-      // Typography
       fontFamily: {
         sans: ["var(--font-geist-sans)", "Inter", "system-ui", "sans-serif"],
         mono: ["var(--font-geist-mono)", "Fira Code", "monospace"],
@@ -32,31 +30,20 @@ export default {
       },
       fontSize: {
         "2xs": ["0.625rem", { lineHeight: "0.75rem" }],
-        "3xl": ["2rem", { lineHeight: "2.25rem" }],
-        "4xl": ["2.5rem", { lineHeight: "2.75rem" }],
-        "5xl": ["3rem", { lineHeight: "3.25rem" }],
+        // Using default Tailwind scale mostly, but can add specifics if needed
       },
-
-      // Spacing
       spacing: {
         "18": "4.5rem",
         "88": "22rem",
         "128": "32rem",
       },
-
-      // Breakpoints adicionales
       screens: {
         "xs": "475px",
         "3xl": "1600px",
       },
-
-      // Color system (shadcn/ui compatible)
       colors: {
-        // Base colors
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
-        
-        // Component colors
         card: {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
@@ -65,21 +52,11 @@ export default {
           DEFAULT: "hsl(var(--popover))",
           foreground: "hsl(var(--popover-foreground))",
         },
-        
-        // Semantic colors
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
-          50: "hsl(var(--primary) / 0.05)",
-          100: "hsl(var(--primary) / 0.1)",
-          200: "hsl(var(--primary) / 0.2)",
-          300: "hsl(var(--primary) / 0.3)",
-          400: "hsl(var(--primary) / 0.4)",
-          500: "hsl(var(--primary) / 0.5)",
-          600: "hsl(var(--primary) / 0.6)",
-          700: "hsl(var(--primary) / 0.7)",
-          800: "hsl(var(--primary) / 0.8)",
-          900: "hsl(var(--primary) / 0.9)",
+          // Optional shades if needed, but CSS vars are primary
+          // 50: "hsl(var(--primary) / 0.05)", 
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
@@ -97,27 +74,21 @@ export default {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",
         },
-        
-        // Status colors
         success: {
-          DEFAULT: "hsl(142 76% 36%)",
-          foreground: "hsl(355 7% 97%)",
+          DEFAULT: "hsl(var(--success))",
+          foreground: "hsl(var(--success-foreground))",
         },
         warning: {
-          DEFAULT: "hsl(38 92% 50%)",
-          foreground: "hsl(48 96% 89%)",
+          DEFAULT: "hsl(var(--warning))",
+          foreground: "hsl(var(--warning-foreground))",
         },
         info: {
-          DEFAULT: "hsl(199 89% 48%)",
-          foreground: "hsl(210 20% 98%)",
+          DEFAULT: "hsl(var(--info))",
+          foreground: "hsl(var(--info-foreground))",
         },
-        
-        // UI colors
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
-        
-        // Chart colors
         chart: {
           "1": "hsl(var(--chart-1))",
           "2": "hsl(var(--chart-2))",
@@ -125,8 +96,6 @@ export default {
           "4": "hsl(var(--chart-4))",
           "5": "hsl(var(--chart-5))",
         },
-        
-        // Sidebar colors
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",
@@ -138,8 +107,6 @@ export default {
           ring: "hsl(var(--sidebar-ring))",
         },
       },
-
-      // Border radius
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
@@ -147,17 +114,11 @@ export default {
         xl: "calc(var(--radius) + 4px)",
         "2xl": "calc(var(--radius) + 8px)",
       },
-
-      // Box shadows
       boxShadow: {
         "inner-lg": "inset 0 2px 4px 0 rgb(0 0 0 / 0.05)",
-        "glow": "0 0 20px rgb(59 130 246 / 0.15)",
-        "glow-lg": "0 0 40px rgb(59 130 246 / 0.15)",
+        // Let globals.css handle the colored shadow utility
       },
-
-      // Animations and keyframes
       keyframes: {
-        // Existing animations
         "accordion-down": {
           from: { height: "0" },
           to: { height: "var(--radix-accordion-content-height)" },
@@ -166,8 +127,6 @@ export default {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
-        
-        // Additional animations
         "fade-in": {
           "0%": { opacity: "0" },
           "100%": { opacity: "1" },
@@ -177,67 +136,77 @@ export default {
           "100%": { opacity: "0" },
         },
         "slide-in-from-top": {
-          "0%": { transform: "translateY(-100%)" },
-          "100%": { transform: "translateY(0)" },
+          "0%": { transform: "translateY(-20px)", opacity: "0" }, /* Added opacity and softer slide */
+          "100%": { transform: "translateY(0)", opacity: "1" },
+        },
+        "slide-out-to-top": { /* Added for completeness */
+            "0%": { transform: "translateY(0)", opacity: "1" },
+            "100%": { transform: "translateY(-20px)", opacity: "0" },
         },
         "slide-in-from-bottom": {
-          "0%": { transform: "translateY(100%)" },
-          "100%": { transform: "translateY(0)" },
+          "0%": { transform: "translateY(20px)", opacity: "0" }, /* Added opacity and softer slide */
+          "100%": { transform: "translateY(0)", opacity: "1" },
+        },
+        "slide-out-to-bottom": {  /* Added for completeness */
+            "0%": { transform: "translateY(0)", opacity: "1" },
+            "100%": { transform: "translateY(20px)", opacity: "0" },
         },
         "slide-in-from-left": {
-          "0%": { transform: "translateX(-100%)" },
-          "100%": { transform: "translateX(0)" },
+          "0%": { transform: "translateX(-20px)", opacity: "0" }, /* Added opacity and softer slide */
+          "100%": { transform: "translateX(0)", opacity: "1" },
+        },
+        "slide-out-to-left": {  /* Added for completeness */
+            "0%": { transform: "translateX(0)", opacity: "1" },
+            "100%": { transform: "translateX(-20px)", opacity: "0" },
         },
         "slide-in-from-right": {
-          "0%": { transform: "translateX(100%)" },
-          "100%": { transform: "translateX(0)" },
+          "0%": { transform: "translateX(20px)", opacity: "0" }, /* Added opacity and softer slide */
+          "100%": { transform: "translateX(0)", opacity: "1" },
+        },
+        "slide-out-to-right": { /* Added for completeness */
+            "0%": { transform: "translateX(0)", opacity: "1" },
+            "100%": { transform: "translateX(20px)", opacity: "0" },
         },
         "bounce-in": {
-          "0%": { transform: "scale(0.3)", opacity: "0" },
-          "50%": { transform: "scale(1.05)" },
-          "70%": { transform: "scale(0.9)" },
+          "0%": { transform: "scale(0.5)", opacity: "0" }, /* Softer bounce */
+          "50%": { transform: "scale(1.05)", opacity: "0.7" },
           "100%": { transform: "scale(1)", opacity: "1" },
         },
         "pulse-slow": {
           "0%, 100%": { opacity: "1" },
-          "50%": { opacity: "0.5" },
+          "50%": { opacity: "0.6" },
         },
         "shimmer": {
-          "0%": { transform: "translateX(-100%)" },
-          "100%": { transform: "translateX(100%)" },
+          "0%": { backgroundPosition: "-1000px 0" },
+          "100%": { backgroundPosition: "1000px 0" },
         },
       },
       animation: {
-        // Existing animations
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
-        
-        // Additional animations
-        "fade-in": "fade-in 0.5s ease-out",
-        "fade-out": "fade-out 0.5s ease-out",
+        "fade-in": "fade-in 0.3s ease-out", /* Slightly faster fade */
+        "fade-out": "fade-out 0.3s ease-in",
         "slide-in-from-top": "slide-in-from-top 0.3s ease-out",
+        "slide-out-to-top": "slide-out-to-top 0.3s ease-in",
         "slide-in-from-bottom": "slide-in-from-bottom 0.3s ease-out",
+        "slide-out-to-bottom": "slide-out-to-bottom 0.3s ease-in",
         "slide-in-from-left": "slide-in-from-left 0.3s ease-out",
+        "slide-out-to-left": "slide-out-to-left 0.3s ease-in",
         "slide-in-from-right": "slide-in-from-right 0.3s ease-out",
-        "bounce-in": "bounce-in 0.6s ease-out",
-        "pulse-slow": "pulse-slow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+        "slide-out-to-right": "slide-out-to-right 0.3s ease-in",
+        "bounce-in": "bounce-in 0.5s ease-out",
+        "pulse-slow": "pulse-slow 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite",
         "shimmer": "shimmer 2s linear infinite",
       },
-
-      // Additional utilities
       backdropBlur: {
         xs: "2px",
       },
-      
-      // Grid template columns
       gridTemplateColumns: {
         "13": "repeat(13, minmax(0, 1fr))",
         "14": "repeat(14, minmax(0, 1fr))",
         "15": "repeat(15, minmax(0, 1fr))",
         "16": "repeat(16, minmax(0, 1fr))",
       },
-
-      // Z-index scale
       zIndex: {
         "60": "60",
         "70": "70",
@@ -245,14 +214,10 @@ export default {
         "90": "90",
         "100": "100",
       },
-
-      // Typography
       lineHeight: {
         "extra-loose": "2.5",
         "12": "3rem",
       },
-
-      // Aspect ratios
       aspectRatio: {
         "4/3": "4 / 3",
         "3/2": "3 / 2",
@@ -263,7 +228,6 @@ export default {
   },
   plugins: [
     require("tailwindcss-animate"),
-    // Plugin personalizado para utilidades adicionales
     function({ addUtilities }: any) {
       const newUtilities = {
         '.scrollbar-hide': {

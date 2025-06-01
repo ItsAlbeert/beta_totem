@@ -87,12 +87,12 @@ export default function TrendsPage() {
           else if (category === 'Mental') scoreValue = latestScore.mentalTime;
           else if (category === 'Extra' && latestScore.extraTime !== undefined) scoreValue = latestScore.extraTime;
           
-          if (scoreValue !== null && scoreValue !== undefined) { // Ensure scoreValue is a valid number
+          if (scoreValue !== null && scoreValue !== undefined) { 
              result[category].push({ name: participantsMap.get(p.id)?.name || p.id, score: scoreValue });
           }
         }
       });
-       result[category].sort((a, b) => (a.score ?? Infinity) - (b.score ?? Infinity)); // Sort: lower is better
+       result[category].sort((a, b) => (a.score ?? Infinity) - (b.score ?? Infinity)); 
     });
     return result;
   }, [processedData]);
@@ -108,34 +108,34 @@ export default function TrendsPage() {
       participants.forEach(p => {
         const latestScore = latestScoresMap.get(p.id);
         const gameTime = latestScore?.gameTimes?.[game.id];
-        if (gameTime !== undefined && gameTime !== null) { // Ensure gameTime is a valid number
+        if (gameTime !== undefined && gameTime !== null) { 
           result[game.id].push({ name: participantsMap.get(p.id)?.name || p.id, score: gameTime });
         }
       });
-      result[game.id].sort((a, b) => (a.score ?? Infinity) - (b.score ?? Infinity)); // Sort: lower is better
+      result[game.id].sort((a, b) => (a.score ?? Infinity) - (b.score ?? Infinity)); 
     });
     return result;
   }, [processedData]);
 
   const renderBarChart = (title: string, description: string, data: SingleMetricDataPoint[], dataKey: string = "score", yAxisLabel: string = "Time (min)", chartKeySuffix: string, mainChart: boolean = false) => {
     const chartUniqueKey = `chart-${chartKeySuffix}-${mainChart ? 'main' : 'sub'}`;
-    if (loading && data.length === 0) return <Skeleton className={cn(mainChart ? "h-[400px]" : "h-[250px]", "w-full")} key={`${chartUniqueKey}-skeleton`} />;
+    if (loading && data.length === 0) return <Skeleton className={cn(mainChart ? "h-[400px]" : "h-[300px]", "w-full shadow-lg")} key={`${chartUniqueKey}-skeleton`} />;
     if (!loading && data.length === 0) return <p className="text-center text-muted-foreground py-4 col-span-full" key={`${chartUniqueKey}-nodata`}>No data available for this chart.</p>;
     
-    const config: ChartConfig = { [dataKey]: { label: yAxisLabel, color: getColor(0) } };
+    const config: ChartConfig = { [dataKey]: { label: yAxisLabel, color: getColor(mainChart ? 0 : Math.floor(Math.random() * 5)) } };
 
     return (
-      <Card className={cn("shadow-md", !mainChart && "sm:col-span-1")} key={chartUniqueKey}>
+      <Card className={cn("shadow-lg hover:shadow-xl transition-shadow duration-300", !mainChart && "sm:col-span-1")} key={chartUniqueKey}>
         <CardHeader>
           <CardTitle className={mainChart ? "text-xl" : "text-lg"}>{title}</CardTitle>
           {mainChart && description && <CardDescription>{description}</CardDescription>}
         </CardHeader>
         <CardContent>
-          <ChartContainer config={config} className={cn(mainChart ? "h-[350px]" : "h-[200px]", "w-full")}>
+          <ChartContainer config={config} className={cn(mainChart ? "h-[350px]" : "h-[250px]", "w-full")}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data} layout="vertical" margin={{ left: 20, right: 20, top:5, bottom: 5 }}>
+              <BarChart data={data} layout="vertical" margin={{ left: 20, right: 30, top:5, bottom: 20 }}>
                 <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis type="number" stroke="hsl(var(--muted-foreground))" />
+                <XAxis type="number" stroke="hsl(var(--muted-foreground))" label={{ value: yAxisLabel, position: 'insideBottom', offset: -10, fill: 'hsl(var(--muted-foreground))' }} />
                 <YAxis 
                   dataKey="name" 
                   type="category" 
@@ -145,7 +145,7 @@ export default function TrendsPage() {
                   tickFormatter={(value) => value.length > 15 ? `${value.substring(0,12)}...` : value}
                   width={100}
                 />
-                <ChartTooltip cursor={{fill: 'hsl(var(--muted-foreground)/0.1)'}} content={<ChartTooltipContent hideLabel />} />
+                <ChartTooltip cursor={{fill: 'hsl(var(--accent)/0.5)'}} content={<ChartTooltipContent indicator="dashed" />} />
                 <Bar dataKey={dataKey} fill={config[dataKey]?.color} radius={4} barSize={mainChart ? 20 : 15} />
               </BarChart>
             </ResponsiveContainer>
@@ -156,14 +156,14 @@ export default function TrendsPage() {
   };
   
   const renderCategorySection = (category: GameCategory, title: string) => {
-    if (!processedData) return <Skeleton className="h-[600px] w-full mb-8" key={`skeleton-cat-${category}`} />;
+    if (!processedData) return <Skeleton className="h-[600px] w-full mb-8 shadow-lg" key={`skeleton-cat-${category}`} />;
     const { games } = processedData;
     const categoryGames = games.filter(g => g.category === category);
     const categoryTotalData = categoryTotalTimeChartData[category];
     
     return (
       <div className="mb-12" key={`category-section-${category}`}>
-        <h2 className="text-3xl font-semibold mb-6 border-b pb-2">{title} Performance</h2>
+        <h2 className="text-3xl font-semibold mb-6 border-b pb-3 text-foreground">{title} Performance</h2>
         {renderBarChart(
           `Overall ${category} Performance`, 
           `Total ${category.toLowerCase()} time for all participants (latest scores). Lower is better.`,
@@ -175,8 +175,8 @@ export default function TrendsPage() {
         )}
         {categoryGames.length > 0 && (
           <>
-            <h3 className="text-2xl font-medium mt-10 mb-4">Individual {category} Games</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <h3 className="text-2xl font-medium mt-10 mb-6 text-foreground/90">Individual {category} Games</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {categoryGames.map(game => (
                 <div key={game.id}>
                 {renderBarChart(
@@ -193,7 +193,7 @@ export default function TrendsPage() {
             </div>
           </>
         )}
-         {categoryGames.length === 0 && !loading && ( // Ensure not to show this if still loading initial games
+         {categoryGames.length === 0 && !loading && ( 
              <p className="text-center text-muted-foreground py-4 mt-6">No {category.toLowerCase()} games defined for this category.</p>
         )}
       </div>
@@ -207,12 +207,12 @@ export default function TrendsPage() {
         title="Performance Trends"
         description="Analyze overall category performance and individual game scores based on latest results."
       />
-      <div className="space-y-8">
+      <div className="space-y-10">
         {loading && !processedData ? (
           <>
-            <Skeleton className="h-[600px] w-full mb-8" key="skeleton-physical" />
-            <Skeleton className="h-[600px] w-full mb-8" key="skeleton-mental" />
-            <Skeleton className="h-[600px] w-full" key="skeleton-extra" />
+            <Skeleton className="h-[600px] w-full mb-8 shadow-lg" key="skeleton-physical" />
+            <Skeleton className="h-[600px] w-full mb-8 shadow-lg" key="skeleton-mental" />
+            <Skeleton className="h-[600px] w-full shadow-lg" key="skeleton-extra" />
           </>
         ) : (
           <>

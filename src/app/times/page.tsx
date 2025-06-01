@@ -71,7 +71,7 @@ export default function TimesPage() {
     const currentSelectedId = form.getValues("participantId");
     if (currentSelectedId && !storedParticipants.find(p => p.id === currentSelectedId)) {
         form.resetField("participantId");
-        form.setValue("participantId", ""); // Explicitly set to empty string
+        form.setValue("participantId", ""); 
     }
   };
   
@@ -86,13 +86,13 @@ export default function TimesPage() {
 
     if (typeof window !== 'undefined') {
       window.addEventListener('storage', handleStorageChange);
-      window.addEventListener('focus', loadInitialData); // Refresh on focus as well
+      window.addEventListener('focus', loadInitialData); 
       return () => {
         window.removeEventListener('storage', handleStorageChange);
         window.removeEventListener('focus', loadInitialData);
       };
     }
-  }, [form]); // form is a dependency to re-evaluate selection if form object changes
+  }, [form]); 
 
   async function onSubmit(values: TimeInputFormValues) {
     const selectedParticipant = participants.find(p => p.id === values.participantId);
@@ -109,8 +109,6 @@ export default function TimesPage() {
     const mentalTime = values.mentalTime;
     const extraTime = values.extraTime || 0;
     const gameSpecificTimes = values.gameTimes || {};
-
-    // Optional: Validate sum of game times against total category time here if needed
 
     const weightedTotalTime = physicalTime + (mentalTime * 3) - extraTime;
 
@@ -131,7 +129,7 @@ export default function TimesPage() {
     
     toast({
       title: "Time Recorded Successfully!",
-      description: `Times for ${selectedParticipant.name} have been saved. Weighted total: ${weightedTotalTime} min.`,
+      description: `Times for ${selectedParticipant.name} have been saved. Weighted total: ${weightedTotalTime.toFixed(2)} min.`,
       variant: "default",
     });
     form.reset({ 
@@ -183,7 +181,7 @@ export default function TimesPage() {
         title="Record Times"
         description="Enter total category times and specific game times for a participant."
       />
-      <Card className="max-w-2xl mx-auto shadow-lg">
+      <Card className="max-w-2xl mx-auto shadow-lg hover:shadow-xl transition-shadow duration-300">
         <CardHeader>
           <CardTitle>New Time Entry</CardTitle>
         </CardHeader>
@@ -198,7 +196,7 @@ export default function TimesPage() {
                     <FormLabel>Participant</FormLabel>
                     <Select 
                       onValueChange={field.onChange} 
-                      value={field.value} // Ensure value is controlled
+                      value={field.value} 
                     >
                       <FormControl>
                         <SelectTrigger>

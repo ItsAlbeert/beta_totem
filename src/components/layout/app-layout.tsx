@@ -1,8 +1,9 @@
+
 "use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import React from "react"; // Changed from 'import type * as React from "react";'
+import React from "react";
 
 import { Icons } from "@/components/icons";
 import {
@@ -50,7 +51,7 @@ function NavMenu({ items, currentPath }: { items: (NavItem | NavItemGroup)[]; cu
   return (
     <SidebarMenu>
       {items.map((itemOrGroup, index) =>
-        "items" in itemOrGroup ? ( // It's a NavItemGroup
+        "items" in itemOrGroup ? ( 
           <React.Fragment key={`group-${index}`}>
             {itemOrGroup.title && (
               <SidebarGroupLabel className="mt-2">{itemOrGroup.title}</SidebarGroupLabel>
@@ -71,7 +72,7 @@ function NavMenu({ items, currentPath }: { items: (NavItem | NavItemGroup)[]; cu
               </SidebarMenuItem>
             ))}
           </React.Fragment>
-        ) : ( // It's a NavItem
+        ) : ( 
           <SidebarMenuItem key={`${itemOrGroup.title}-${index}`}>
             <SidebarMenuButton
               asChild

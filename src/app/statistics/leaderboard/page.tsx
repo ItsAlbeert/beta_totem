@@ -38,7 +38,7 @@ export default function LeaderboardPage() {
       valA = (valA === undefined || valA === null ? (direction === 'asc' ? Infinity : -Infinity) : valA) as number;
       valB = (valB === undefined || valB === null ? (direction === 'asc' ? Infinity : -Infinity) : valB) as number;
       
-      return direction === 'asc' ? valA - valB : valB - valA;
+      return direction === 'asc' ? (valA as number) - (valB as number) : (valB as number) - (valA as number);
     });
   }, []);
 
@@ -107,7 +107,7 @@ export default function LeaderboardPage() {
         title="Leaderboard"
         description="Overall participant rankings based on weighted total time. Click rows for game details."
       />
-      <Card className="shadow-lg">
+      <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
         <CardHeader>
           <CardTitle>Current Standings</CardTitle>
           <CardDescription>
@@ -157,7 +157,7 @@ export default function LeaderboardPage() {
                   <React.Fragment key={entry.id}>
                     <TableRow 
                         onClick={() => toggleExpandParticipant(entry.id)} 
-                        className={cn("cursor-pointer", expandedParticipantId === entry.id && "bg-muted/30 hover:bg-muted/40")}
+                        className={cn("cursor-pointer", expandedParticipantId === entry.id && "bg-muted/30 hover:bg-muted/40 transition-colors")}
                     >
                       <TableCell className="text-center">
                         {expandedParticipantId === entry.id ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -171,15 +171,15 @@ export default function LeaderboardPage() {
                       </TableCell>
                       <TableCell className="font-medium">{entry.name}</TableCell>
                       <TableCell>{entry.year}</TableCell>
-                      <TableCell className="text-right">{entry.physicalTime} min</TableCell>
-                      <TableCell className="text-right">{entry.mentalTime} min</TableCell>
-                      <TableCell className="text-right">{entry.extraTime || 0} min</TableCell>
+                      <TableCell className="text-right">{entry.physicalTime.toFixed(2)} min</TableCell>
+                      <TableCell className="text-right">{entry.mentalTime.toFixed(2)} min</TableCell>
+                      <TableCell className="text-right">{(entry.extraTime || 0).toFixed(2)} min</TableCell>
                       <TableCell className="text-right font-semibold">{entry.weightedTotalTime.toFixed(2)} min</TableCell>
                     </TableRow>
                     {expandedParticipantId === entry.id && (
-                      <TableRow className="bg-muted/10 hover:bg-muted/20">
+                      <TableRow className="bg-muted/10 hover:bg-muted/20 transition-colors">
                         <TableCell colSpan={9} className="p-0">
-                          <div className="p-4 pl-[70px]"> 
+                          <div className="p-4 pl-[70px] border-l-4 border-primary/30"> 
                             <h4 className="text-md font-semibold mb-2">Game Breakdown (Latest Score on {new Date(entry.scoreRecordedAt).toLocaleDateString()}):</h4>
                             {(['Physical', 'Mental', 'Extra'] as GameCategory[]).map(category => {
                               const categoryGames = Object.entries(entry.gameTimes || {})
@@ -199,7 +199,7 @@ export default function LeaderboardPage() {
                                   <h5 className="text-sm font-medium text-primary mb-1">{category} Games:</h5>
                                   <ul className="list-disc pl-6 space-y-0.5 text-sm text-foreground/80">
                                     {categoryGames.map(game => (
-                                      <li key={game.name}>{game.name}: {game.time} min</li>
+                                      <li key={game.name}>{game.name}: {game.time.toFixed(2)} min</li>
                                     ))}
                                   </ul>
                                 </div>
