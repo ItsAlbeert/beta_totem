@@ -20,6 +20,12 @@ export const primaryNav: NavItemGroup[] = [
   {
     items: [
       {
+        title: "Dashboard",
+        href: "/dashboard",
+        icon: Icons.LayoutDashboard,
+        description: "Overview of the competition.",
+      },
+      {
         title: "Record Times",
         href: "/times",
         icon: Icons.Clock,
@@ -57,7 +63,7 @@ export const primaryNav: NavItemGroup[] = [
       {
         title: "Comparisons",
         href: "/statistics/comparisons",
-        icon: Icons.BarChart3, // Using BarChart3 for comparisons
+        icon: Icons.BarChart3,
         description: "Compare participants and game performances.",
       },
     ],
