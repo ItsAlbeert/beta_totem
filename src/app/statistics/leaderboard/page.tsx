@@ -243,8 +243,8 @@ export default function LeaderboardPage() {
                                                 </span>
                                             </li>
                                         ))}
-                                        <li className="font-semibold">Subtotal Extras (Bruto): {entry.puntos_extras_cruda.toFixed(1)} pts</li>
-                                        <li className="font-semibold">P<sub>Extras</sub> Final (Ajustado): {entry.puntos_extras.toFixed(1)} pts</li>
+                                        <li className="font-semibold">P<sub>Extras</sub> (Cruda): {entry.puntos_extras_cruda.toFixed(1)} pts</li>
+                                        <li className="font-semibold">P<sub>Extras</sub> (Final Ajustado): {entry.puntos_extras.toFixed(1)} pts</li>
                                     </ul>
                                 </div>
                             )}

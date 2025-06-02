@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import type { Participant } from "@/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
+import { Trash2 } from "lucide-react";
 import { getParticipants, addParticipant, deleteParticipant } from "@/lib/firestore-services";
 
 export default function ParticipantsPage() {
@@ -45,7 +46,7 @@ export default function ParticipantsPage() {
     onError: (error) => {
       toast({
         title: "Error al añadir participante",
-        description: error.message,
+        description: (error as Error).message,
         variant: "destructive",
       });
     },
@@ -66,7 +67,7 @@ export default function ParticipantsPage() {
     onError: (error) => {
       toast({
         title: "Error al eliminar participante",
-        description: error.message,
+        description: (error as Error).message,
         variant: "destructive",
       });
     },
@@ -249,6 +250,7 @@ export default function ParticipantsPage() {
                         onClick={() => handleDelete(participant.id)}
                         disabled={deleteParticipantMutation.isPending && deleteParticipantMutation.variables === participant.id}
                       >
+                        <Trash2 className="mr-2 h-4 w-4" />
                         {(deleteParticipantMutation.isPending && deleteParticipantMutation.variables === participant.id) ? "Eliminando..." : "Eliminar"}
                       </Button>
                     </TableCell>

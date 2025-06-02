@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import type { Game, GameCategory, ExtraGameType } from "@/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Puzzle } from "lucide-react";
+import { Puzzle, Pencil, Trash2 } from "lucide-react";
 import { getGames, addGame, deleteGame, updateGame } from "@/lib/firestore-services";
 
 export default function GamesPage() {
@@ -38,7 +38,7 @@ export default function GamesPage() {
     mutationFn: async (gameData: { id?: string; data: Omit<Game, "id">}) => {
       if (gameData.id) {
         await updateGame(gameData.id, gameData.data);
-        return { ...gameData.data, id: gameData.id }; // Return the updated game structure
+        return { ...gameData.data, id: gameData.id } as Game; 
       } else {
         return addGame(gameData.data);
       }
@@ -61,7 +61,7 @@ export default function GamesPage() {
     onError: (error) => {
       toast({
         title: isEditing ? "Error al actualizar juego" : "Error al añadir juego",
-        description: error.message,
+        description: (error as Error).message,
         variant: "destructive",
       });
     },
@@ -88,7 +88,7 @@ export default function GamesPage() {
     onError: (error) => {
       toast({
         title: "Error al eliminar juego",
-        description: error.message,
+        description: (error as Error).message,
         variant: "destructive",
       });
     },
@@ -290,6 +290,7 @@ export default function GamesPage() {
                         onClick={() => handleEdit(game)}
                         disabled={gameMutation.isPending || deleteGameMutation.isPending}
                       >
+                        <Pencil className="mr-2 h-4 w-4" />
                         Editar
                       </Button>
                       <Button
@@ -298,6 +299,7 @@ export default function GamesPage() {
                         onClick={() => handleDelete(game.id)}
                         disabled={deleteGameMutation.isPending && deleteGameMutation.variables === game.id || gameMutation.isPending}
                       >
+                        <Trash2 className="mr-2 h-4 w-4" />
                         {(deleteGameMutation.isPending && deleteGameMutation.variables === game.id) ? "Eliminando..." : "Eliminar"}
                       </Button>
                     </TableCell>
