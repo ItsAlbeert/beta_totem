@@ -92,7 +92,7 @@ export default function LeaderboardPage() {
       if (column === 'rank' || column === 'name' || column === 'year') {
         newDirection = 'asc';
       } else { 
-        newDirection = 'desc';
+        newDirection = 'desc'; // Higher points are better, so default to desc for point columns
       }
     }
     setSortColumn(column);
@@ -215,9 +215,9 @@ export default function LeaderboardPage() {
                                 <h4 className="text-md font-semibold mb-2">Desglose (Última Puntuación del {new Date(entry.scoreRecordedAt).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })}):</h4>
                                 {entry.latestScoreId && (
                                     <Link href={`/times?edit_score_id=${entry.latestScoreId}&participant_id=${entry.id}`} passHref>
-                                        <Button variant="outline" size="sm">
-                                            <Edit3 className="mr-2 h-4 w-4" />
-                                            Editar Esta Puntuación
+                                        <Button variant="outline" size="icon" className="rounded-full h-8 w-8">
+                                            <Edit3 className="h-4 w-4" />
+                                            <span className="sr-only">Editar Esta Puntuación</span>
                                         </Button>
                                     </Link>
                                 )}

@@ -24,7 +24,7 @@ export default function ParticipantsPage() {
   const [newYear, setNewYear] = useState<1 | 2 | 3 | "">(1);
   const [newPhoto, setNewPhoto] = useState<File | null>(null);
 
-  const { data: participants = [], isLoading: isLoadingParticipants } = useQuery<Participant[]>({
+  const { data: participants = [], isLoading: isLoadingParticipants, error: errorParticipants } = useQuery<Participant[]>({
     queryKey: ["participants"],
     queryFn: getParticipants,
   });
@@ -72,6 +72,10 @@ export default function ParticipantsPage() {
       });
     },
   });
+
+  if (errorParticipants) {
+    return <p className="text-destructive text-center py-8">Error al cargar los participantes: {(errorParticipants as Error).message}</p>;
+  }
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -206,7 +210,7 @@ export default function ParticipantsPage() {
         <CardHeader>
           <CardTitle>Lista de Participantes</CardTitle>
           <CardDescription>
-            Una lista de todos los participantes.
+            Una lista de todos los participantes. Haz clic en el icono para eliminar.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -219,6 +223,7 @@ export default function ParticipantsPage() {
                     <Skeleton className="h-4 w-[250px]" />
                     <Skeleton className="h-4 w-[200px]" />
                   </div>
+                  <Skeleton className="h-8 w-8 rounded-full ml-auto" />
                 </div>
               ))}
             </div>
@@ -246,12 +251,13 @@ export default function ParticipantsPage() {
                     <TableCell className="text-right">
                       <Button
                         variant="destructive"
-                        size="sm"
+                        size="icon"
                         onClick={() => handleDelete(participant.id)}
                         disabled={deleteParticipantMutation.isPending && deleteParticipantMutation.variables === participant.id}
+                        className="rounded-full h-8 w-8"
                       >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        {(deleteParticipantMutation.isPending && deleteParticipantMutation.variables === participant.id) ? "Eliminando..." : "Eliminar"}
+                        <Trash2 className="h-4 w-4" />
+                        <span className="sr-only">Eliminar</span>
                       </Button>
                     </TableCell>
                   </TableRow>

@@ -35,7 +35,7 @@ export default function GamesPage() {
   });
 
   const gameMutation = useMutation({
-    mutationFn: async (gameData: { id?: string; data: Omit<Game, "id">}) => {
+    mutationFn: async (gameData: { id?: string; data: Omit<Game, "id" | "extraType"> & { extraType?: ExtraGameType} }) => {
       if (gameData.id) {
         await updateGame(gameData.id, gameData.data);
         return { ...gameData.data, id: gameData.id } as Game; 
@@ -129,7 +129,7 @@ export default function GamesPage() {
       return;
     }
 
-    const gameData: Omit<Game, "id"> = {
+    const gameData: Omit<Game, "id" | "extraType"> & { extraType?: ExtraGameType} = {
       name: newGameName,
       description: newGameDescription,
       category: newGameCategory,
@@ -137,9 +137,8 @@ export default function GamesPage() {
 
     if (newGameCategory === "Extra") {
       gameData.extraType = newGameExtraType;
-    } else {
-      delete gameData.extraType; 
     }
+    // No need to explicitly delete gameData.extraType; if not set, it won't be in the object
     
     gameMutation.mutate({ id: editingGameId || undefined, data: gameData });
   };
@@ -198,7 +197,12 @@ export default function GamesPage() {
               <Label htmlFor="gameCategory">Categoría</Label>
               <Select 
                 value={newGameCategory} 
-                onValueChange={(value) => setNewGameCategory(value as GameCategory)}
+                onValueChange={(value) => {
+                    setNewGameCategory(value as GameCategory);
+                    if (value !== 'Extra') {
+                        setNewGameExtraType('opcional'); // Reset extra type if not Extra category
+                    }
+                }}
                 disabled={gameMutation.isPending}
               >
                 <SelectTrigger id="gameCategory">
@@ -248,7 +252,7 @@ export default function GamesPage() {
         <CardHeader>
           <CardTitle>Lista de Juegos</CardTitle>
           <CardDescription>
-            Lista de todos los juegos definidos. Haz clic en "Editar" para modificar un juego.
+            Lista de todos los juegos definidos. Haz clic en los iconos para editar o eliminar un juego.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -261,7 +265,7 @@ export default function GamesPage() {
                     <Skeleton className="h-4 w-[200px]" />
                     <Skeleton className="h-4 w-[300px]" />
                   </div>
-                   <Skeleton className="h-8 w-[120px] ml-auto" />
+                   <Skeleton className="h-8 w-[72px] ml-auto" /> {/* Adjusted for two icon buttons */}
                 </div>
               ))}
             </div>
@@ -286,21 +290,23 @@ export default function GamesPage() {
                     <TableCell className="text-right space-x-2">
                        <Button
                         variant="outline"
-                        size="sm"
+                        size="icon"
                         onClick={() => handleEdit(game)}
                         disabled={gameMutation.isPending || deleteGameMutation.isPending}
+                        className="rounded-full h-8 w-8"
                       >
-                        <Pencil className="mr-2 h-4 w-4" />
-                        Editar
+                        <Pencil className="h-4 w-4" />
+                        <span className="sr-only">Editar</span>
                       </Button>
                       <Button
                         variant="destructive"
-                        size="sm"
+                        size="icon"
                         onClick={() => handleDelete(game.id)}
                         disabled={deleteGameMutation.isPending && deleteGameMutation.variables === game.id || gameMutation.isPending}
+                        className="rounded-full h-8 w-8"
                       >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        {(deleteGameMutation.isPending && deleteGameMutation.variables === game.id) ? "Eliminando..." : "Eliminar"}
+                        <Trash2 className="h-4 w-4" />
+                         <span className="sr-only">Eliminar</span>
                       </Button>
                     </TableCell>
                   </TableRow>
