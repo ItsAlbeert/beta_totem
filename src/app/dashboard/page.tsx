@@ -7,7 +7,7 @@ import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { Participant, Score, Game, LeaderboardEntry, ExtraChallengeStatus } from "@/types";
+import type { Participant, Score, Game, LeaderboardEntry, ExtraGameStatusDetail } from "@/types";
 import { Icons } from "@/components/icons";
 import { formatDistanceToNowStrict } from 'date-fns';
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -17,7 +17,7 @@ import { calculateAllParticipantScores } from "@/lib/data-utils";
 interface DashboardData {
   totalParticipants: number;
   totalGames: number;
-  averageFinalScore: number | null; 
+  averageTotalPoints: number | null; 
   topPerformers: LeaderboardEntry[]; 
   recentScoresData: (Score & { participantName?: string, scoreSummary?: string })[]; 
   totalScoresLogged: number;
@@ -27,7 +27,9 @@ export default function DashboardPage() {
   const [currentTime, setCurrentTime] = useState<string>(""); 
 
   useEffect(() => {
-    setCurrentTime(new Date().toLocaleTimeString());
+    const now = new Date();
+    setCurrentTime(now.toLocaleTimeString());
+    // Update time every second, but ensure it starts immediately
     const timerId = setInterval(() => setCurrentTime(new Date().toLocaleTimeString()), 1000);
     return () => clearInterval(timerId);
   }, []);
@@ -57,7 +59,7 @@ export default function DashboardPage() {
 
 
   const dashboardData = useMemo((): DashboardData | null => {
-    if (isLoadingOverall || overallError || !participants.length || !games) { 
+    if (isLoadingOverall || overallError || !participants.length || !games || !allScores) { 
       return null; 
     }
 
@@ -67,35 +69,38 @@ export default function DashboardPage() {
     const totalScoresLogged = allScores.length;
 
     let topPerformers: LeaderboardEntry[] = [];
-    let averageFinalScore: number | null = null;
+    let averageTotalPoints: number | null = null;
 
     if (allScores.length > 0 && participants.length > 0 && games.length > 0) {
         const leaderboard = calculateAllParticipantScores(participants, allScores, games);
         topPerformers = leaderboard.slice(0, 3);
 
-        const finalScoresList = leaderboard.map(entry => entry.puntuacion_final_ponderada);
-        averageFinalScore = finalScoresList.length > 0 
-        ? finalScoresList.reduce((sum, score) => sum + score, 0) / finalScoresList.length 
+        const totalPointsList = leaderboard.map(entry => entry.puntos_total);
+        averageTotalPoints = totalPointsList.length > 0 
+        ? totalPointsList.reduce((sum, score) => sum + score, 0) / totalPointsList.length 
         : null;
     }
       
     const recentScoresData = recentScoresRaw.map(score => {
         let extraSummary = "N/A";
-        if (score.extraGameStatuses) {
-            const completed = Object.values(score.extraGameStatuses).filter(s => s === 'hecho').length;
-            const partial = Object.values(score.extraGameStatuses).filter(s => s === 'hecho_a_medias').length;
-            const totalExtra = Object.keys(score.extraGameStatuses).length;
-            if (totalExtra > 0) {
-                 extraSummary = `${completed} done, ${partial} partial`;
+        if (score.extraGameDetailedStatuses) {
+            const statuses = Object.values(score.extraGameDetailedStatuses);
+            const muyBienCount = statuses.filter(s => s === 'muy_bien').length;
+            const regularCount = statuses.filter(s => s === 'regular').length;
+            const noHechoCount = statuses.filter(s => s === 'no_hecho').length;
+            const totalExtraEntries = statuses.length;
+
+            if (totalExtraEntries > 0) {
+                 extraSummary = `${muyBienCount} MB, ${regularCount} R, ${noHechoCount} NH`;
             } else {
-                extraSummary = "No extra games";
+                extraSummary = "No extra games data";
             }
         }
 
         return {
             ...score,
             participantName: participantsMap.get(score.participantId) || "Unknown",
-            scoreSummary: `T_F: ${score.tiempo_fisico.toFixed(1)}, T_M: ${score.tiempo_mental.toFixed(1)}, Extra: ${extraSummary}`
+            scoreSummary: `T_F: ${score.tiempo_fisico.toFixed(1)}, T_M: ${score.tiempo_mental.toFixed(1)}, Extras: ${extraSummary}`
         };
     });
 
@@ -103,7 +108,7 @@ export default function DashboardPage() {
     return {
       totalParticipants,
       totalGames,
-      averageFinalScore,
+      averageTotalPoints,
       topPerformers,
       recentScoresData,
       totalScoresLogged,
@@ -160,10 +165,10 @@ export default function DashboardPage() {
           isLoading={isLoadingOverall}
         />
         <StatCard 
-          title="Average Final Score (SF)" 
-          value={dashboardData?.averageFinalScore !== null && dashboardData?.averageFinalScore !== undefined ? `${dashboardData.averageFinalScore.toFixed(1)} pts` : 'N/A'} 
+          title="Average Total Points (Pᴛ)" 
+          value={dashboardData?.averageTotalPoints !== null && dashboardData?.averageTotalPoints !== undefined ? `${dashboardData.averageTotalPoints.toFixed(1)} pts` : 'N/A'} 
           icon={Icons.Sigma}
-          description="Avg. of final weighted scores (SF)."
+          description="Avg. of final total points (Pᴛ)."
           isLoading={isLoadingOverall}
         />
         <StatCard 
@@ -181,7 +186,7 @@ export default function DashboardPage() {
             <CardTitle className="flex items-center">
               <Icons.Award className="mr-2 h-6 w-6 text-yellow-500" /> Top Performers
             </CardTitle>
-            <CardDescription>Top 3 participants by Final Score (SF). Higher is better.</CardDescription>
+            <CardDescription>Top 3 participants by Total Points (Pᴛ). Higher is better.</CardDescription>
           </CardHeader>
           <CardContent>
             {isLoadingOverall && !dashboardData ? (
@@ -201,7 +206,7 @@ export default function DashboardPage() {
                     </Avatar>
                     <div className="flex-1">
                       <p className="font-medium text-foreground">{performer.name}</p>
-                      <p className="text-sm text-muted-foreground">Score Final (SF): {performer.puntuacion_final_ponderada.toFixed(1)} pts</p>
+                      <p className="text-sm text-muted-foreground">Total Points (Pᴛ): {performer.puntos_total.toFixed(1)} pts</p>
                     </div>
                   </li>
                 ))}

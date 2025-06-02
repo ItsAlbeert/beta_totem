@@ -10,7 +10,7 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart";
-import type { ChartConfig, Participant, Score, Game, GameCategory, SingleMetricDataPoint, LeaderboardEntry } from "@/types";
+import type { ChartConfig, Participant, Score, Game, GameCategory, SingleMetricDataPoint, LeaderboardEntry, ExtraGameType } from "@/types";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -64,7 +64,7 @@ export default function TrendsPage() {
   }, [participants, allScores, games, isLoadingOverall, overallError]);
 
 
-  const categoryNormalizedScoreChartData = useMemo(() => {
+  const categoryPointsChartData = useMemo(() => {
     if (!processedData) return { Physical: [], Mental: [], Extra: [] };
     const { leaderboardForLatestScores, participantsMap } = processedData;
     
@@ -72,9 +72,9 @@ export default function TrendsPage() {
 
     leaderboardForLatestScores.forEach(entry => {
       const participantName = participantsMap.get(entry.id)?.name || entry.id;
-      result.Physical.push({ name: participantName, score: entry.puntuacion_fisica_normalizada });
-      result.Mental.push({ name: participantName, score: entry.puntuacion_mental_normalizada });
-      result.Extra.push({ name: participantName, score: entry.puntuacion_extra_normalizada });
+      result.Physical.push({ name: participantName, score: entry.puntos_fisico });
+      result.Mental.push({ name: participantName, score: entry.puntos_mental });
+      result.Extra.push({ name: participantName, score: entry.puntos_extras });
     });
 
     Object.keys(result).forEach(cat => {
@@ -83,12 +83,12 @@ export default function TrendsPage() {
     return result;
   }, [processedData]);
 
-  const individualGameChartData = useMemo(() => {
+  const individualGameTimeChartData = useMemo(() => {
     if (!processedData) return {};
-    const { games: allGames, leaderboardForLatestScores, participantsMap } = processedData; // Renamed games to allGames for clarity
+    const { games: allGamesList, leaderboardForLatestScores, participantsMap } = processedData;
     const result: { [gameId: string]: SingleMetricDataPoint[] } = {};
 
-    allGames.filter(game => game.category === 'Physical' || game.category === 'Mental').forEach(game => {
+    allGamesList.filter(game => game.category === 'Physical' || game.category === 'Mental').forEach(game => {
       result[game.id] = [];
       leaderboardForLatestScores.forEach(entry => {
         const gameTime = entry.gameTimes?.[game.id];
@@ -96,6 +96,7 @@ export default function TrendsPage() {
           result[game.id].push({ name: participantsMap.get(entry.id)?.name || entry.id, score: gameTime });
         }
       });
+      // Sort by time (lower is better for these games)
       result[game.id].sort((a, b) => (a.score ?? Infinity) - (b.score ?? Infinity)); 
     });
     return result;
@@ -116,7 +117,7 @@ export default function TrendsPage() {
     if (isLoadingOverall && !processedData && data.length === 0) return <Skeleton className={cn(mainChart ? "h-[400px]" : "h-[300px]", "w-full shadow-lg")} key={`${chartUniqueKey}-skeleton`} />;
     if (!isLoadingOverall && data.length === 0) return <p className="text-center text-muted-foreground py-4 col-span-full" key={`${chartUniqueKey}-nodata`}>No data available for this chart.</p>;
     
-    const config: ChartConfig = { [dataKey]: { label: yAxisLabel, color: getColor(mainChart ? 0 : Math.floor(Math.random() * 5) + 1) } };
+    const config: ChartConfig = { [dataKey]: { label: yAxisLabel, color: getColor(mainChart ? Math.floor(Math.random() * 3) : Math.floor(Math.random() * 5) + 3) } };
 
     return (
       <Card className={cn("shadow-lg hover:shadow-xl transition-shadow duration-300", !mainChart && "sm:col-span-1")} key={chartUniqueKey}>
@@ -127,13 +128,13 @@ export default function TrendsPage() {
         <CardContent>
           <ChartContainer config={config} className={cn(mainChart ? "h-[350px]" : "h-[250px]", "w-full")}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data} layout="vertical" margin={{ left: 20, right: 30, top:5, bottom: 35 /* Increased bottom margin */ }}>
+              <BarChart data={data} layout="vertical" margin={{ left: 20, right: 30, top:5, bottom: 35 }}>
                 <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis 
                     type="number" 
                     stroke="hsl(var(--muted-foreground))" 
-                    label={{ value: yAxisLabel, position: 'insideBottom', offset: -15 /* Adjusted offset */, fill: 'hsl(var(--muted-foreground))' }} 
-                    domain={lowerIsBetter ? ['auto', 'auto'] : [0, 'auto']} // Adjusted domain for lowerIsBetter
+                    label={{ value: yAxisLabel, position: 'insideBottom', offset: -15 , fill: 'hsl(var(--muted-foreground))' }} 
+                    domain={lowerIsBetter ? ['dataMin', 'auto'] : [0, 'auto']}
                 />
                 <YAxis 
                   dataKey="name" 
@@ -158,28 +159,32 @@ export default function TrendsPage() {
     if (isLoadingOverall && !processedData) return <Skeleton className="h-[600px] w-full mb-8 shadow-lg" key={`skeleton-cat-${category}`} />;
     
     const categoryGames = processedData?.games.filter(g => g.category === category) || [];
-    const categoryTotalData = categoryNormalizedScoreChartData[category] || [];
+    const categoryTotalData = categoryPointsChartData[category] || [];
     
-    const yAxisLabel = category === 'Extra' ? `${category} Score (S_e)` : `${category} Score (S_${category.substring(0,1).toLowerCase()})`;
-    const description = category === 'Extra' 
-      ? `Normalized ${category.toLowerCase()} score (0-100) from status. Higher is better.`
-      : `Normalized ${category.toLowerCase()} score (0-100) from total time. Higher is better.`;
+    const yAxisLabel = category === 'Physical' ? `Puntos Físico (Pғ)` 
+                     : category === 'Mental' ? `Puntos Mental (Pᴍ)` 
+                     : `Puntos Extras (Pᴇ)`;
+
+    const description = category === 'Physical' 
+      ? `Puntos de rendimiento físico (30-100). T≤220min = 100pts, T≥360min = 30pts.`
+      : category === 'Mental' 
+      ? `Puntos de rendimiento mental (30-100). T≤50min = 100pts, T≥120min = 30pts.`
+      : `Puntos por juegos extra (-10 a +30). Calculado de estados (Muy Bien, Regular, No Hecho).`;
 
     return (
       <div className="mb-12" key={`category-section-${category}`}>
-        <h2 className="text-3xl font-semibold mb-6 border-b pb-3 text-foreground">{titleSuffix} Performance (Normalized Scores)</h2>
+        <h2 className="text-3xl font-semibold mb-6 border-b pb-3 text-foreground">{titleSuffix} Performance (Points)</h2>
         {renderBarChart(
-          `Overall ${category} Normalized Score`, 
+          `Overall ${category} Points`, 
           description,
           categoryTotalData,
           "score",
           yAxisLabel,
-          `total-norm-${category.toLowerCase()}`,
+          `total-points-${category.toLowerCase()}`,
           true,
-          false 
+          false // Higher points are better
         )}
 
-        {/* Individual game charts for Physical and Mental categories only */}
         { (category === 'Physical' || category === 'Mental') && categoryGames.length > 0 && (
           <>
             <h3 className="text-2xl font-medium mt-10 mb-6 text-foreground/90">Individual {category} Games (Raw Times)</h3>
@@ -189,12 +194,12 @@ export default function TrendsPage() {
                 {renderBarChart(
                   game.name,
                   "", 
-                  individualGameChartData[game.id] || [],
+                  individualGameTimeChartData[game.id] || [],
                   "score",
                   "Time (min)", 
                   `game-${game.id}`,
                   false,
-                  true 
+                  true // Lower time is better for these raw times
                 )}
                 </div>
               ))}
@@ -204,11 +209,11 @@ export default function TrendsPage() {
          { (category === 'Physical' || category === 'Mental') && categoryGames.length === 0 && !isLoadingOverall && !overallError && ( 
              <p className="text-center text-muted-foreground py-4 mt-6">No {category.toLowerCase()} games defined for this category.</p>
         )}
-        { category === 'Extra' && categoryGames.length === 0 && !isLoadingOverall && !overallError && (
-            <p className="text-center text-muted-foreground py-4 mt-6">No Extra games defined. Add 'Extra' category games on the Games page to see status-based scores here.</p>
-        )}
-         { category === 'Extra' && categoryGames.length > 0 && (
-            <p className="text-center text-muted-foreground py-4 mt-6">Individual 'Extra' game statuses are part of the overall S_e calculation. View detailed statuses in the Leaderboard.</p>
+        { category === 'Extra' && ( // Always show this for Extra, regardless of games defined
+            <p className="text-center text-muted-foreground py-4 mt-6 text-sm">
+              Individual "Extra" game statuses and their point contributions are detailed in the <strong>Leaderboard</strong> and <strong>Calculations</strong> pages. 
+              The chart above shows the final P<sub>Extras</sub> score.
+            </p>
         )}
       </div>
     );
@@ -222,14 +227,14 @@ export default function TrendsPage() {
     <>
       <PageHeader
         title="Performance Trends"
-        description="Analyze overall category normalized scores and individual game raw times based on latest results."
+        description="Analyze overall category points and individual game raw times based on latest results."
       />
       <div className="space-y-10">
         {isLoadingOverall && !processedData ? (
           <>
-            <Skeleton className="h-[600px] w-full mb-8 shadow-lg" key="skeleton-physical-norm" />
-            <Skeleton className="h-[600px] w-full mb-8 shadow-lg" key="skeleton-mental-norm" />
-            <Skeleton className="h-[600px] w-full shadow-lg" key="skeleton-extra-norm" />
+            <Skeleton className="h-[600px] w-full mb-8 shadow-lg" key="skeleton-physical-points" />
+            <Skeleton className="h-[600px] w-full mb-8 shadow-lg" key="skeleton-mental-points" />
+            <Skeleton className="h-[600px] w-full shadow-lg" key="skeleton-extra-points" />
           </>
         ) : (
           <>

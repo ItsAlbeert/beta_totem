@@ -1,11 +1,14 @@
 
 export type GameCategory = 'Physical' | 'Mental' | 'Extra';
+export type ExtraGameType = 'opcional' | 'obligatoria';
+export type ExtraGameStatusDetail = 'muy_bien' | 'regular' | 'no_hecho';
 
 export interface Game {
   id: string;
   name: string;
   description: string;
   category: GameCategory;
+  extraType?: ExtraGameType; // Only relevant if category is 'Extra'
 }
 
 export interface Participant {
@@ -15,47 +18,51 @@ export interface Participant {
   photoUrl?: string;
 }
 
-export type ExtraChallengeStatus = 'no_hecho' | 'hecho_a_medias' | 'hecho';
-
 // For data stored/retrieved from Firestore
 export interface Score {
   id: string; // Firestore document ID
   participantId: string;
   
-  tiempo_fisico: number;   // Raw physical time in minutes
-  tiempo_mental: number;   // Raw mental time in minutes
+  tiempo_fisico: number;   // Raw physical time in minutes for all physical challenges
+  tiempo_mental: number;   // Raw mental time in minutes for all mental challenges
   
-  // New: Status for each individual extra game
-  extraGameStatuses?: { [gameId: string]: ExtraChallengeStatus }; 
+  // Status for each individual extra game, identified by gameId
+  extraGameDetailedStatuses?: { [gameId: string]: ExtraGameStatusDetail }; 
 
-  gameTimes?: { [gameId: string]: number }; // Optional: individual game times for Physical/Mental
+  gameTimes?: { [gameId: string]: number }; // Optional: individual game times for Physical/Mental (for breakdown, not direct scoring)
   recordedAt: string; // ISO string date (converted from Firestore Timestamp)
 
-  // Calculated scores (will be calculated on the fly)
-  puntuacion_fisica_normalizada?: number; // S_p
-  puntuacion_mental_normalizada?: number; // S_m
-  ajuste_extra_minutos?: number; // E (for extra challenges)
-  puntuacion_extra_normalizada?: number; // S_e
-  puntuacion_final_ponderada?: number;  // SF
+  // Calculated scores based on the new system (will be calculated on the fly)
+  // These are direct points, not normalized 0-100 scores like before (except for display consistency if needed)
+  puntos_fisico?: number;     // P_fisico (e.g., 30-100)
+  puntos_mental?: number;     // P_mental (e.g., 30-100)
+  puntos_extras?: number;     // P_extras (e.g., -10 to 30)
+  puntos_extras_cruda?: number; // Raw sum of extra points before capping
+  puntos_total?: number;      // P_total = P_fisico + P_mental + P_extras
 }
 
 // For leaderboard display, combining participant and their calculated scores
 export interface LeaderboardEntry extends Participant {
   rank: number;
   
+  // Raw inputs from latest score
   latest_tiempo_fisico: number;
   latest_tiempo_mental: number;
-  // Store the processed extra game statuses for display if needed
-  latest_extra_game_statuses?: { [gameId: string]: ExtraChallengeStatus }; 
+  latest_extra_game_detailed_statuses?: { [gameId: string]: ExtraGameStatusDetail }; 
   
-  puntuacion_fisica_normalizada: number; // S_p
-  puntuacion_mental_normalizada: number; // S_m
-  ajuste_extra_minutos: number;          // E
-  puntuacion_extra_normalizada: number;  // S_e
-  puntuacion_final_ponderada: number;   // SF
+  // Calculated points from latest score
+  puntos_fisico: number;     // P_fisico
+  puntos_mental: number;     // P_mental
+  puntos_extras: number;     // P_extras (capped)
+  puntos_extras_cruda: number; // Raw sum of extra points before capping
+  puntos_total: number;      // P_total
+
+  // Detailed points for each extra game for drilldown
+  individual_extra_game_points?: { [gameId: string]: number };
+
 
   scoreRecordedAt: string; // ISO string of the latest score
-  gameTimes?: { [gameId: string]: number }; // From latest score for Physical/Mental games
+  gameTimes?: { [gameId: string]: number }; // From latest score for Physical/Mental games breakdown
 }
 
 export interface PerformanceOverTimeDataPoint {
@@ -82,4 +89,10 @@ export interface ChartConfig {
     | { color?: string; theme?: never }
     | { color?: never; theme: Record<string, string> }
   );
+}
+
+// Type for the detailed breakdown in calculations page
+export interface CalculationBreakdownEntry extends LeaderboardEntry {
+    // Inherits all from LeaderboardEntry
+    // Add any specific fields if needed for the calculation page that aren't in LeaderboardEntry
 }
