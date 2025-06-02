@@ -1,5 +1,5 @@
 import type { SVGProps } from "react";
-import { Bolt, BarChart3, ListOrdered, LineChart, Users, Clock, Gamepad2, Puzzle, LayoutDashboard, Award, Activity, TrendingUp, type LucideIcon, CalendarClock, Sigma } from "lucide-react";
+import { Bolt, BarChart3, ListOrdered, LineChart, Users, Clock, Gamepad2, Puzzle, LayoutDashboard, Award, Activity, TrendingUp, type LucideIcon, CalendarClock, Sigma, Calculator } from "lucide-react";
 
 export const Icons = {
   Logo: (props: SVGProps<SVGSVGElement>) => (
@@ -31,6 +31,8 @@ export const Icons = {
   TrendingUp,
   CalendarClock,
   Sigma,
+  Calculator,
 };
 
 export type Icon = LucideIcon;
+

@@ -43,6 +43,12 @@ export const primaryNav: NavItemGroup[] = [
         icon: Icons.Gamepad2,
         description: "Manage competition games and their categories.",
       },
+      {
+        title: "Calculations",
+        href: "/calculations",
+        icon: Icons.Calculator,
+        description: "Detailed breakdown of score calculations.",
+      },
     ],
   },
   {
@@ -69,3 +75,4 @@ export const primaryNav: NavItemGroup[] = [
     ],
   },
 ];
+
