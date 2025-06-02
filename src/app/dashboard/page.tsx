@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useEffect, useState, useMemo } from "react";
@@ -6,12 +7,12 @@ import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { Participant, Score, Game, LeaderboardEntry, ExtraGameStatusDetail } from "@/types";
+import type { Participant, Score, Game, LeaderboardEntry, ExtraGameStatusDetail, ScoringSettings } from "@/types";
 import { Icons } from "@/components/icons";
 import { formatDistanceToNowStrict } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { getParticipants, getGames, getScores, getRecentScores } from "@/lib/firestore-services";
+import { getParticipants, getGames, getScores, getRecentScores, getScoringSettings } from "@/lib/firestore-services";
 import { calculateAllParticipantScores } from "@/lib/data-utils"; 
 
 interface DashboardData {
@@ -53,12 +54,17 @@ export default function DashboardPage() {
     queryFn: () => getRecentScores(5),
   });
 
-  const isLoadingOverall = isLoadingParticipants || isLoadingGames || isLoadingScores || isLoadingRecentScores;
-  const overallError = errorParticipants || errorGames || errorScores || errorRecentScores;
+  const { data: scoringSettings, isLoading: isLoadingSettings, error: errorSettings } = useQuery<ScoringSettings>({
+    queryKey: ["scoringSettings"],
+    queryFn: getScoringSettings,
+  });
+
+  const isLoadingOverall = isLoadingParticipants || isLoadingGames || isLoadingScores || isLoadingRecentScores || isLoadingSettings;
+  const overallError = errorParticipants || errorGames || errorScores || errorRecentScores || errorSettings;
 
 
   const dashboardData = useMemo((): DashboardData | null => {
-    if (isLoadingOverall || overallError || !participants.length || !games || !allScores) { 
+    if (isLoadingOverall || overallError || !participants.length || !games || !allScores || !scoringSettings) { 
       return null; 
     }
 
@@ -71,7 +77,7 @@ export default function DashboardPage() {
     let averageTotalPoints: number | null = null;
 
     if (allScores.length > 0 && participants.length > 0 && games.length > 0) {
-        const leaderboard = calculateAllParticipantScores(participants, allScores, games);
+        const leaderboard = calculateAllParticipantScores(participants, allScores, games, scoringSettings);
         topPerformers = leaderboard.slice(0, 3);
 
         const totalPointsList = leaderboard.map(entry => entry.puntos_total);
@@ -95,7 +101,7 @@ export default function DashboardPage() {
 
             if (parts.length > 0) {
                 extraSummary = parts.join(', ');
-            } else if (statuses.length > 0) { // Should not happen if checks above are met, but as a fallback
+            } else if (statuses.length > 0) { 
                 extraSummary = `${statuses.length} Extras`;
             } else {
                  extraSummary = "Sin detalle extra";
@@ -108,11 +114,17 @@ export default function DashboardPage() {
                 extraSummary = "No hay juegos extra definidos";
             }
         }
+        
+        let scoreDetail = `T.Físico: ${score.tiempo_fisico.toFixed(1)} min, T.Mental: ${score.tiempo_mental.toFixed(1)} min`;
+        if (score.puntos_fisico !== undefined && score.puntos_mental !== undefined && score.puntos_extras !== undefined) {
+             scoreDetail = `P.Fís: ${score.puntos_fisico.toFixed(1)}, P.Ment: ${score.puntos_mental.toFixed(1)}, P.Ext: ${score.puntos_extras.toFixed(1)}`;
+        }
+
 
         return {
             ...score,
             participantName: participantsMap.get(score.participantId) || "Desconocido",
-            scoreSummary: `T.Físico: ${score.tiempo_fisico.toFixed(1)} min, T.Mental: ${score.tiempo_mental.toFixed(1)} min, Extras: ${extraSummary}`
+            scoreSummary: `${scoreDetail}, Extras: ${extraSummary}`
         };
     });
 
@@ -125,7 +137,7 @@ export default function DashboardPage() {
       recentScoresData,
       totalScoresLogged,
     };
-  }, [participants, games, allScores, recentScoresRaw, isLoadingOverall, overallError]);
+  }, [participants, games, allScores, recentScoresRaw, scoringSettings, isLoadingOverall, overallError]);
 
 
   const StatCard = ({ title, value, icon: Icon, description, isLoading }: { title: string; value: string | number | null; icon: Icons.Icon; description?: string, isLoading?: boolean }) => (
@@ -180,7 +192,7 @@ export default function DashboardPage() {
           title="Media de Puntos Totales (Pᴛ)" 
           value={dashboardData?.averageTotalPoints !== null && dashboardData?.averageTotalPoints !== undefined ? `${dashboardData.averageTotalPoints.toFixed(1)} pts` : 'N/A'} 
           icon={Icons.Sigma}
-          description="Media de los puntos totales finales (Pᴛ)."
+          description={scoringSettings ? `Pᴛ basado en P.Fís (${scoringSettings.physical.minPoints}-${scoringSettings.physical.maxPoints}), P.Ment (${scoringSettings.mental.minPoints}-${scoringSettings.mental.maxPoints}), P.Ext (${scoringSettings.extras.capMin}-${scoringSettings.extras.capMax})` : "Media de los puntos totales finales (Pᴛ)."}
           isLoading={isLoadingOverall}
         />
         <StatCard 

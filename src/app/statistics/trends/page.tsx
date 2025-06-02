@@ -10,11 +10,11 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart";
-import type { ChartConfig, Participant, Score, Game, GameCategory, SingleMetricDataPoint, LeaderboardEntry, ExtraGameType } from "@/types";
+import type { ChartConfig, Participant, Score, Game, GameCategory, SingleMetricDataPoint, LeaderboardEntry, ExtraGameType, ScoringSettings } from "@/types";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { getParticipants, getScores, getGames } from "@/lib/firestore-services";
+import { getParticipants, getScores, getGames, getScoringSettings } from "@/lib/firestore-services";
 import { calculateAllParticipantScores } from "@/lib/data-utils"; 
 
 const chartColors = [
@@ -31,6 +31,7 @@ interface ProcessedPageData {
   leaderboardForLatestScores: LeaderboardEntry[]; 
   participantsMap: Map<string, Participant>;
   gamesMap: Map<string, Game>;
+  scoringSettings: ScoringSettings;
 }
 
 export default function TrendsPage() {
@@ -49,19 +50,24 @@ export default function TrendsPage() {
     queryFn: getGames,
   });
 
-  const isLoadingOverall = isLoadingParticipants || isLoadingScores || isLoadingGames;
-  const overallError = errorParticipants || errorScores || errorGames;
+  const { data: scoringSettings, isLoading: isLoadingSettings, error: errorSettings } = useQuery<ScoringSettings>({
+    queryKey: ["scoringSettings"],
+    queryFn: getScoringSettings,
+  });
+
+  const isLoadingOverall = isLoadingParticipants || isLoadingScores || isLoadingGames || isLoadingSettings;
+  const overallError = errorParticipants || errorScores || errorGames || errorSettings;
 
   const processedData = useMemo((): ProcessedPageData | null => {
-    if (isLoadingOverall || overallError || !participants.length || !allScores.length || !games.length) return null;
+    if (isLoadingOverall || overallError || !participants.length || !allScores.length || !games.length || !scoringSettings) return null;
 
     const participantsMap = new Map(participants.map(p => [p.id, p]));
     const gamesMap = new Map(games.map(g => [g.id, g]));
     
-    const leaderboardForLatestScores = calculateAllParticipantScores(participants, allScores, games);
+    const leaderboardForLatestScores = calculateAllParticipantScores(participants, allScores, games, scoringSettings);
 
-    return { participants, allScores, games, leaderboardForLatestScores, participantsMap, gamesMap };
-  }, [participants, allScores, games, isLoadingOverall, overallError]);
+    return { participants, allScores, games, leaderboardForLatestScores, participantsMap, gamesMap, scoringSettings };
+  }, [participants, allScores, games, scoringSettings, isLoadingOverall, overallError]);
 
 
   const categoryPointsChartData = useMemo(() => {
@@ -78,7 +84,7 @@ export default function TrendsPage() {
     });
 
     Object.keys(result).forEach(cat => {
-        (result[cat as GameCategory] as SingleMetricDataPoint[]).sort((a, b) => (b.score ?? -Infinity) - (a.score ?? -Infinity)); // Higher points are better
+        (result[cat as GameCategory] as SingleMetricDataPoint[]).sort((a, b) => (b.score ?? -Infinity) - (a.score ?? -Infinity)); 
     });
     return result;
   }, [processedData]);
@@ -96,7 +102,7 @@ export default function TrendsPage() {
           result[game.id].push({ name: participantsMap.get(entry.id)?.name || entry.id, score: gameTime });
         }
       });
-      result[game.id].sort((a, b) => (a.score ?? Infinity) - (b.score ?? Infinity)); // Lower time is better
+      result[game.id].sort((a, b) => (a.score ?? Infinity) - (b.score ?? Infinity)); 
     });
     return result;
   }, [processedData]);
@@ -113,7 +119,7 @@ export default function TrendsPage() {
     lowerIsBetter: boolean = false 
   ) => {
     const chartUniqueKey = `chart-${chartKeySuffix}-${mainChart ? 'main' : 'sub'}`;
-    if (isLoadingOverall && !processedData && data.length === 0) return <Skeleton className={cn(mainChart ? "h-[400px]" : "h-[300px]", "w-full shadow-lg")} key={`${chartUniqueKey}-skeleton`} />;
+    if (isLoadingOverall && (!processedData || !processedData.scoringSettings) && data.length === 0) return <Skeleton className={cn(mainChart ? "h-[400px]" : "h-[300px]", "w-full shadow-lg")} key={`${chartUniqueKey}-skeleton`} />;
     if (!isLoadingOverall && data.length === 0) return <p className="text-center text-muted-foreground py-4 col-span-full" key={`${chartUniqueKey}-nodata`}>No hay datos disponibles para este gráfico.</p>;
     
     const config: ChartConfig = { [dataKey]: { label: yAxisLabel, color: getColor(mainChart ? Math.floor(Math.random() * 3) : Math.floor(Math.random() * 5) + 3) } };
@@ -133,7 +139,7 @@ export default function TrendsPage() {
                     type="number" 
                     stroke="hsl(var(--muted-foreground))" 
                     label={{ value: yAxisLabel, position: 'insideBottom', offset: -15 , fill: 'hsl(var(--muted-foreground))' }} 
-                    domain={lowerIsBetter ? ['dataMin', 'auto'] : (mainChart || dataKey === 'score' && !lowerIsBetter ? [0, 'auto'] : ['auto', 'auto'])} // Adjust domain for points vs time
+                    domain={lowerIsBetter ? ['dataMin', 'auto'] : (mainChart || (dataKey === 'score' && !lowerIsBetter) ? [0, 'auto'] : ['auto', 'auto'])} 
                 />
                 <YAxis 
                   dataKey="name" 
@@ -159,6 +165,7 @@ export default function TrendsPage() {
     
     const categoryGames = processedData?.games.filter(g => g.category === category) || [];
     const categoryTotalData = categoryPointsChartData[category] || [];
+    const settings = processedData?.scoringSettings;
     
     let yAxisLabel = "Puntos";
     let description = "";
@@ -166,15 +173,15 @@ export default function TrendsPage() {
     switch(category) {
         case 'Physical':
             yAxisLabel = `Puntos Físico (Pғ)`;
-            description = `Puntos de rendimiento físico (30-100). T≤220min = 100pts, T≥360min = 30pts.`;
+            description = settings ? `Puntos (máx ${settings.physical.maxPoints}, mín ${settings.physical.minPoints}). T≤${settings.physical.threshold1}min = ${settings.physical.maxPoints}pts, T≥${settings.physical.threshold2}min = ${settings.physical.minPoints}pts.` : 'Puntos de rendimiento físico.';
             break;
         case 'Mental':
             yAxisLabel = `Puntos Mental (Pᴍ)`;
-            description = `Puntos de rendimiento mental (30-100). T≤50min = 100pts, T≥120min = 30pts.`;
+            description = settings ? `Puntos (máx ${settings.mental.maxPoints}, mín ${settings.mental.minPoints}). T≤${settings.mental.threshold1}min = ${settings.mental.maxPoints}pts, T≥${settings.mental.threshold2}min = ${settings.mental.minPoints}pts.` : 'Puntos de rendimiento mental.';
             break;
         case 'Extra':
             yAxisLabel = `Puntos Extras (Pᴇ)`;
-            description = `Puntos por juegos extra (-10 a +30). Calculado de estados (Muy Bien, Regular, No Hecho).`;
+            description = settings ? `Puntos (máx ${settings.extras.capMax}, mín ${settings.extras.capMin}). Calculado de estados (Muy Bien, Regular, No Hecho) para juegos opcionales y obligatorios.` : 'Puntos por juegos extra.';
             break;
     }
 
@@ -235,10 +242,10 @@ export default function TrendsPage() {
     <>
       <PageHeader
         title="Tendencias de Rendimiento"
-        description="Analiza puntos generales por categoría y tiempos brutos de juegos individuales basados en los últimos resultados."
+        description="Analiza puntos generales por categoría y tiempos brutos de juegos individuales basados en los últimos resultados y la configuración actual."
       />
       <div className="space-y-10">
-        {isLoadingOverall && !processedData ? (
+        {isLoadingOverall && (!processedData || !processedData.scoringSettings) ? (
           <>
             <Skeleton className="h-[600px] w-full mb-8 shadow-lg" key="skeleton-physical-points" />
             <Skeleton className="h-[600px] w-full mb-8 shadow-lg" key="skeleton-mental-points" />

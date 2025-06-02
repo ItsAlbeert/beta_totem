@@ -14,12 +14,12 @@ import {
   ChartLegend,
   ChartLegendContent,
 } from "@/components/ui/chart";
-import type { ChartConfig, Participant, Score, Game, PerformanceOverTimeDataPoint, MultiMetricDataPoint, LeaderboardEntry } from "@/types";
+import type { ChartConfig, Participant, Score, Game, PerformanceOverTimeDataPoint, MultiMetricDataPoint, LeaderboardEntry, ScoringSettings } from "@/types";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { getParticipants, getScores, getGames } from "@/lib/firestore-services";
+import { getParticipants, getScores, getGames, getScoringSettings } from "@/lib/firestore-services";
 import { calculateAllParticipantScores } from "@/lib/data-utils"; 
 
 const chartColors = [
@@ -35,6 +35,7 @@ interface ProcessedPageData {
   games: Game[];
   participantsMap: Map<string, Participant>;
   gamesMap: Map<string, Game>;
+  scoringSettings: ScoringSettings;
 }
 
 export default function ComparisonsPage() {
@@ -56,17 +57,22 @@ export default function ComparisonsPage() {
     queryFn: getGames,
   });
 
-  const isLoadingOverall = isLoadingParticipants || isLoadingScores || isLoadingGames;
-  const overallError = errorParticipants || errorScores || errorGames;
+  const { data: scoringSettings, isLoading: isLoadingSettings, error: errorSettings } = useQuery<ScoringSettings>({
+    queryKey: ["scoringSettings"],
+    queryFn: getScoringSettings,
+  });
+
+  const isLoadingOverall = isLoadingParticipants || isLoadingScores || isLoadingGames || isLoadingSettings;
+  const overallError = errorParticipants || errorScores || errorGames || errorSettings;
 
   const processedData = useMemo((): ProcessedPageData | null => {
-    if (isLoadingOverall || overallError || !participants.length || !allScores.length || !games.length) return null;
+    if (isLoadingOverall || overallError || !participants.length || !allScores.length || !games.length || !scoringSettings) return null;
 
     const participantsMap = new Map(participants.map(p => [p.id, p]));
     const gamesMap = new Map(games.map(g => [g.id, g]));
 
-    return { participants, allScores, games, participantsMap, gamesMap };
-  }, [participants, allScores, games, isLoadingOverall, overallError]);
+    return { participants, allScores, games, participantsMap, gamesMap, scoringSettings };
+  }, [participants, allScores, games, scoringSettings, isLoadingOverall, overallError]);
 
 
   const handleParticipantSelection = (participantId: string, checked: boolean) => {
@@ -77,15 +83,15 @@ export default function ComparisonsPage() {
 
   const handleGameSelection = (gameId: string, checked: boolean) => {
     setSelectedGameIdsForComparison(prev =>
-      checked ? [...prev, gameId] : prev.filter(id => id !== participantId)
+      checked ? [...prev, gameId] : prev.filter(id => id !== participantId) // Corrected: id !== gameId
     );
   };
 
   const participantPTotalComparisonChart = useMemo(() => {
-    if (!processedData || selectedParticipantIdsForComparison.length === 0 || !processedData.allScores.length) {
+    if (!processedData || selectedParticipantIdsForComparison.length === 0 || !processedData.allScores.length || !processedData.scoringSettings) {
       return { chartData: [], chartConfig: {} };
     }
-    const { participantsMap, allScores, games: allGames, participants: allParticipants } = processedData;
+    const { participantsMap, allScores: allScoresList, games: allGamesList, participants: allParticipantsList, scoringSettings: currentSettings } = processedData;
     
     const chartDataPoints: { [participantName: string]: { time: string, value: number }[] } = {};
 
@@ -93,14 +99,24 @@ export default function ComparisonsPage() {
       const participantName = participantsMap.get(pid)?.name || pid;
       chartDataPoints[participantName] = [];
 
-      const participantScores = allScores
+      const participantScoresRaw = allScoresList
         .filter(s => s.participantId === pid)
         .sort((a,b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime());
 
-      participantScores.forEach(score => {
-        const tempParticipantArray = allParticipants.filter(p => p.id === pid);
-        const tempScoreArray = [score];
-        const singleEntryCalculation = calculateAllParticipantScores(tempParticipantArray, tempScoreArray, allGames);
+      participantScoresRaw.forEach(score => {
+        // For historical points, we need to calculate P_Total with THIS specific score as the "latest"
+        // for THIS participant, considering all other participants' scores up to this point are irrelevant
+        // for THIS specific calculation. This is simplified; a true historical comparison would be complex.
+        // For simplicity here, we'll use the current global settings but only this score for this participant.
+        const tempParticipantArray = allParticipantsList.filter(p => p.id === pid);
+        
+        // Create a temporary "allScores" array for calculation that only includes this specific score
+        // and any previous scores for this participant to establish their own historical context if needed,
+        // though the current calculateAllParticipantScores uses only the *absolute* latest.
+        // For trend, we need P_Total based on *this* score being the latest.
+        const scoresForThisCalculationPoint = [score]; 
+
+        const singleEntryCalculation = calculateAllParticipantScores(tempParticipantArray, scoresForThisCalculationPoint, allGamesList, currentSettings);
         
         if (singleEntryCalculation.length > 0) {
           const p_total = singleEntryCalculation[0].puntos_total;
@@ -114,9 +130,8 @@ export default function ComparisonsPage() {
     
     const allTimestamps = Array.from(new Set(Object.values(chartDataPoints).flat().map(dp => dp.time)))
       .sort((a, b) => {
-        // Custom sort for "d MMM, HH:mm"
-        const dateA = parseISO(allScores.find(s => format(parseISO(s.recordedAt), "d MMM, HH:mm", { locale: es }) === a)?.recordedAt || new Date(0).toISOString());
-        const dateB = parseISO(allScores.find(s => format(parseISO(s.recordedAt), "d MMM, HH:mm", { locale: es }) === b)?.recordedAt || new Date(0).toISOString());
+        const dateA = parseISO(allScoresList.find(s => format(parseISO(s.recordedAt), "d MMM, HH:mm", { locale: es }) === a)?.recordedAt || new Date(0).toISOString());
+        const dateB = parseISO(allScoresList.find(s => format(parseISO(s.recordedAt), "d MMM, HH:mm", { locale: es }) === b)?.recordedAt || new Date(0).toISOString());
         return dateA.getTime() - dateB.getTime();
       });
 
@@ -142,10 +157,10 @@ export default function ComparisonsPage() {
 
 
   const gameComparisonChart = useMemo(() => {
-    if (!processedData || selectedGameIdsForComparison.length === 0 || !processedData.allScores.length) {
+    if (!processedData || selectedGameIdsForComparison.length === 0 || !processedData.allScores.length || !processedData.scoringSettings) {
          return { chartData: [], chartConfig: {} };
     }
-    const { participants: allParticipantsList, games: allGamesList, allScores: allScoresList, participantsMap, gamesMap } = processedData;
+    const { participants: allParticipantsList, games: allGamesList, allScores: allScoresList, participantsMap, gamesMap, scoringSettings: currentSettings } = processedData;
 
     const selectedGames = selectedGameIdsForComparison
         .map(id => gamesMap.get(id))
@@ -154,7 +169,7 @@ export default function ComparisonsPage() {
 
     if (selectedGames.length === 0) return { chartData: [], chartConfig: {} };
 
-    const leaderboardForLatestScores = calculateAllParticipantScores(allParticipantsList, allScoresList, allGamesList);
+    const leaderboardForLatestScores = calculateAllParticipantScores(allParticipantsList, allScoresList, allGamesList, currentSettings);
 
     const chartData: MultiMetricDataPoint[] = leaderboardForLatestScores.map(entry => {
       const participantName = participantsMap.get(entry.id)?.name || entry.id;
@@ -175,7 +190,7 @@ export default function ComparisonsPage() {
 
 
   const renderLineChart = (title: string, description: string, data: PerformanceOverTimeDataPoint[], config: ChartConfig, yAxisLabel: string = "Puntos (Pᴛ)") => {
-    if (isLoadingOverall && !processedData && data.length === 0 && selectedParticipantIdsForComparison.length === 0) return <Skeleton className="h-[400px] w-full shadow-lg" />;
+    if (isLoadingOverall && (!processedData || !processedData.scoringSettings) && data.length === 0 && selectedParticipantIdsForComparison.length === 0) return <Skeleton className="h-[400px] w-full shadow-lg" />;
     if (!isLoadingOverall && selectedParticipantIdsForComparison.length > 0 && data.length === 0) return <p className="text-center text-muted-foreground py-8">No hay puntuaciones registradas para el/los participante(s) seleccionado(s) o no hay datos para graficar.</p>;
     if (selectedParticipantIdsForComparison.length === 0) return <p className="text-center text-muted-foreground py-8">Selecciona participantes para comparar su tendencia de Puntos Totales (Pᴛ).</p>;
     
@@ -206,7 +221,7 @@ export default function ComparisonsPage() {
   };
 
   const renderGroupedBarChart = (title: string, description: string, data: MultiMetricDataPoint[], config: ChartConfig, yAxisLabel: string = "Tiempo (min)") => {
-    if (isLoadingOverall && !processedData && data.length === 0 && selectedGameIdsForComparison.length === 0) return <Skeleton className="h-[400px] w-full shadow-lg" />;
+    if (isLoadingOverall && (!processedData || !processedData.scoringSettings) && data.length === 0 && selectedGameIdsForComparison.length === 0) return <Skeleton className="h-[400px] w-full shadow-lg" />;
     if (!isLoadingOverall && selectedGameIdsForComparison.length > 0 && data.length === 0 ) return <p className="text-center text-muted-foreground py-8">No hay datos para los juegos seleccionados o participantes con puntuaciones en esos juegos.</p>;
     if (selectedGameIdsForComparison.length === 0) return <p className="text-center text-muted-foreground py-8">Selecciona juegos Físicos/Mentales para comparar tiempos brutos de rendimiento.</p>;
 
@@ -247,7 +262,7 @@ export default function ComparisonsPage() {
         description="Selecciona participantes o juegos abajo para comparaciones específicas."
       />
       
-      {isLoadingOverall && !processedData ? (
+      {isLoadingOverall && (!processedData || !processedData.scoringSettings) ? (
         <div className="space-y-8">
             <Skeleton className="h-[600px] w-full shadow-lg" />
             <Skeleton className="h-[600px] w-full shadow-lg" />

@@ -8,13 +8,13 @@ import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import type { LeaderboardEntry, Participant, Score, Game, GameCategory, ExtraGameStatusDetail, ExtraGameType } from "@/types";
+import type { LeaderboardEntry, Participant, Score, Game, GameCategory, ExtraGameStatusDetail, ExtraGameType, ScoringSettings } from "@/types";
 import { ArrowDownUp, ChevronDown, ChevronRight, Edit3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { getParticipants, getScores, getGames } from "@/lib/firestore-services";
+import { getParticipants, getScores, getGames, getScoringSettings } from "@/lib/firestore-services";
 import { calculateAllParticipantScores } from "@/lib/data-utils";
 
 type SortableColumn = keyof Pick<LeaderboardEntry, 
@@ -48,8 +48,13 @@ export default function LeaderboardPage() {
     queryFn: getGames,
   });
 
-  const isLoadingOverall = isLoadingParticipants || isLoadingScores || isLoadingGames;
-  const overallError = errorParticipants || errorScores || errorGames;
+  const { data: scoringSettings, isLoading: isLoadingSettings, error: errorSettings } = useQuery<ScoringSettings>({
+    queryKey: ["scoringSettings"],
+    queryFn: getScoringSettings,
+  });
+
+  const isLoadingOverall = isLoadingParticipants || isLoadingScores || isLoadingGames || isLoadingSettings;
+  const overallError = errorParticipants || errorScores || errorGames || errorSettings;
 
   const applySort = useCallback((data: LeaderboardEntry[], column: SortableColumn, direction: SortDirection) => {
     if(data.length === 0) return data;
@@ -66,22 +71,17 @@ export default function LeaderboardPage() {
       valB = (valB === undefined || valB === null ? (direction === 'asc' ? Infinity : -Infinity) : valB) as number;
       
       if (column === 'rank') { 
-        // Rank is special: 'asc' means 1, 2, 3...
-        // If we want to sort by rank but show highest rank (e.g. last place) first, it would be 'desc' on the rank value itself
-        // However, default sort is by rank ascending.
         return direction === 'asc' ? (valA as number) - (valB as number) : (valB as number) - (valA as number);
       }
-      // For points, higher is better, so 'desc' is the natural "good" sort.
-      // If direction is 'asc', we sort smaller points first. If 'desc', larger points first.
       return direction === 'asc' ? (valA as number) - (valB as number) : (valB as number) - (valA as number);
     });
   }, []);
   
   const leaderboardData = useMemo(() => {
-    if (isLoadingOverall || overallError || !participants.length || !allScores.length || !games.length) return [];
-    const processed = calculateAllParticipantScores(participants, allScores, games);
+    if (isLoadingOverall || overallError || !participants.length || !allScores.length || !games.length || !scoringSettings) return [];
+    const processed = calculateAllParticipantScores(participants, allScores, games, scoringSettings);
     return applySort(processed, sortColumn, sortDirection);
-  }, [participants, allScores, games, isLoadingOverall, overallError, sortColumn, sortDirection, applySort]);
+  }, [participants, allScores, games, scoringSettings, isLoadingOverall, overallError, sortColumn, sortDirection, applySort]);
 
 
   const handleSort = (column: SortableColumn) => {
@@ -89,10 +89,9 @@ export default function LeaderboardPage() {
     if (sortColumn === column) {
       newDirection = sortDirection === 'asc' ? 'desc' : 'asc';
     } else {
-      // Default sort directions for new columns
       if (column === 'rank' || column === 'name' || column === 'year') {
         newDirection = 'asc';
-      } else { // For points columns
+      } else { 
         newDirection = 'desc';
       }
     }
@@ -302,5 +301,3 @@ export default function LeaderboardPage() {
     </>
   );
 }
-
-    

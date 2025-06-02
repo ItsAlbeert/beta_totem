@@ -15,20 +15,17 @@ import {
   DocumentData,
   QueryDocumentSnapshot,
   updateDoc,
-  getDoc, // Added getDoc
+  getDoc, 
+  setDoc, // Added setDoc for settings
 } from "firebase/firestore";
 import { db } from "./firebase";
-import type { Participant, Game, Score, ExtraGameStatusDetail, GameCategory, ExtraGameType } from "@/types";
+import type { Participant, Game, Score, ExtraGameStatusDetail, GameCategory, ExtraGameType, ScoringSettings } from "@/types";
 
 // --- Helper to convert Firestore doc to actual data with ID ---
 function mapDocToDataWithId<T>(docSnap: QueryDocumentSnapshot<DocumentData> | DocumentData): T {
-  // Check if it's a QueryDocumentSnapshot by looking for 'exists' and 'id' properties
   if ('exists' in docSnap && typeof docSnap.exists === 'function' && 'id' in docSnap) {
     return { id: docSnap.id, ...docSnap.data() } as T;
   }
-  // Fallback for DocumentData if id is already included (e.g. after manual construction)
-  // This branch might not be strictly necessary if always using QueryDocumentSnapshot
-  // or ensuring id is manually added if using DocumentData directly.
   return docSnap as T;
 }
 
@@ -100,15 +97,14 @@ export async function addGame(gameData: Omit<Game, "id">): Promise<Game> {
 }
 
 export async function updateGame(gameId: string, gameData: Partial<Omit<Game, "id">>): Promise<void> {
-  if (gameData.category === 'Extra' && !gameData.extraType) {
-    gameData.extraType = 'opcional';
-  } else if (gameData.category !== 'Extra' && gameData.hasOwnProperty('extraType')) {
-    // @ts-ignore
-    const { extraType, ...restOfGameData } = gameData;
-    gameData = restOfGameData;
+  let dataToUpdate = { ...gameData };
+  if (dataToUpdate.category === 'Extra' && !dataToUpdate.extraType) {
+    dataToUpdate.extraType = 'opcional';
+  } else if (dataToUpdate.category !== 'Extra' && dataToUpdate.hasOwnProperty('extraType')) {
+    delete dataToUpdate.extraType;
   }
   const gameRef = doc(db, GAMES_COLLECTION, gameId);
-  await updateDoc(gameRef, gameData);
+  await updateDoc(gameRef, dataToUpdate);
 }
 
 export async function deleteGame(gameId: string): Promise<void> {
@@ -148,7 +144,7 @@ export async function getScoreById(scoreId: string): Promise<Score | null> {
       extraGameDetailedStatuses: data.extraGameDetailedStatuses || {},
       gameTimes: data.gameTimes || {},
       recordedAt: (data.recordedAt as Timestamp).toDate().toISOString(),
-    } as Score; // Calculated fields like puntos_total are not stored, so they won't be here
+    } as Score;
   } else {
     console.error(`No score found with ID: ${scoreId}`);
     return null;
@@ -162,7 +158,7 @@ type AppScoreData = {
   tiempo_mental: number;
   extraGameDetailedStatuses?: { [gameId: string]: ExtraGameStatusDetail };
   gameTimes?: { [gameId: string]: number };
-  recordedAt: Date; // Used for new scores
+  recordedAt: Date; 
 };
 
 type FirestoreScoreData = Omit<AppScoreData, 'recordedAt'> & { 
@@ -195,7 +191,6 @@ export async function addScore(
   };
 }
 
-// Data type for updating, typically doesn't include participantId or recordedAt
 type UpdatableScoreData = Pick<Score, 'tiempo_fisico' | 'tiempo_mental' | 'gameTimes' | 'extraGameDetailedStatuses'>;
 
 export async function updateScore(
@@ -203,7 +198,6 @@ export async function updateScore(
   dataToUpdate: UpdatableScoreData
 ): Promise<void> {
   const scoreRef = doc(db, SCORES_COLLECTION, scoreId);
-  // We don't update recordedAt or participantId when editing a score's content
   await updateDoc(scoreRef, {
     tiempo_fisico: dataToUpdate.tiempo_fisico,
     tiempo_mental: dataToUpdate.tiempo_mental,
@@ -230,4 +224,55 @@ export async function getRecentScores(count: number): Promise<Score[]> {
     });
 }
 
+// --- Scoring Settings ---
+const SETTINGS_COLLECTION = "settings";
+const SCORING_RULES_DOC_ID = "scoring_rules";
+
+export const DEFAULT_SCORING_SETTINGS: ScoringSettings = {
+  physical: {
+    threshold1: 220,
+    threshold2: 360,
+    maxPoints: 100,
+    minPoints: 30,
+  },
+  mental: {
+    threshold1: 50,
+    threshold2: 120,
+    maxPoints: 100,
+    minPoints: 30,
+  },
+  extras: {
+    capMax: 30,
+    capMin: -10,
+    points: {
+      opcional: {
+        muy_bien: 10,
+        regular: 6,
+        no_hecho: 0,
+      },
+      obligatoria: {
+        muy_bien: 10,
+        regular: 6,
+        no_hecho: -10,
+      },
+    },
+  },
+};
+
+export async function getScoringSettings(): Promise<ScoringSettings> {
+  const docRef = doc(db, SETTINGS_COLLECTION, SCORING_RULES_DOC_ID);
+  const docSnap = await getDoc(docRef);
+  if (docSnap.exists()) {
+    return { id: docSnap.id, ...docSnap.data() } as ScoringSettings;
+  } else {
+    // If settings don't exist, create them with default values
+    await setDoc(docRef, DEFAULT_SCORING_SETTINGS);
+    return { id: SCORING_RULES_DOC_ID, ...DEFAULT_SCORING_SETTINGS };
+  }
+}
+
+export async function updateScoringSettings(settings: Omit<ScoringSettings, 'id'>): Promise<void> {
+  const docRef = doc(db, SETTINGS_COLLECTION, SCORING_RULES_DOC_ID);
+  await setDoc(docRef, settings, { merge: true }); // Use setDoc with merge to create or overwrite
+}
     
