@@ -32,8 +32,7 @@ export interface Score {
   gameTimes?: { [gameId: string]: number }; // Optional: individual game times for Physical/Mental (for breakdown, not direct scoring)
   recordedAt: string; // ISO string date (converted from Firestore Timestamp)
 
-  // Calculated scores based on the new system (will be calculated on the fly)
-  // These are direct points, not normalized 0-100 scores like before (except for display consistency if needed)
+  // Calculated scores based on the new system (will be calculated on the fly by data-utils)
   puntos_fisico?: number;     // P_fisico (e.g., 30-100)
   puntos_mental?: number;     // P_mental (e.g., 30-100)
   puntos_extras?: number;     // P_extras (e.g., -10 to 30)
@@ -49,6 +48,7 @@ export interface LeaderboardEntry extends Participant {
   latest_tiempo_fisico: number;
   latest_tiempo_mental: number;
   latest_extra_game_detailed_statuses?: { [gameId: string]: ExtraGameStatusDetail }; 
+  latestScoreId?: string; // ID of the latest score document
   
   // Calculated points from latest score
   puntos_fisico: number;     // P_fisico
@@ -96,3 +96,5 @@ export interface CalculationBreakdownEntry extends LeaderboardEntry {
     // Inherits all from LeaderboardEntry
     // Add any specific fields if needed for the calculation page that aren't in LeaderboardEntry
 }
+
+    

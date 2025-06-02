@@ -2,13 +2,14 @@
 "use client";
 
 import React, { useState, useMemo, useCallback } from "react";
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { LeaderboardEntry, Participant, Score, Game, GameCategory, ExtraGameStatusDetail, ExtraGameType } from "@/types";
-import { ArrowDownUp, ChevronDown, ChevronRight } from "lucide-react";
+import { ArrowDownUp, ChevronDown, ChevronRight, Edit3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -65,8 +66,13 @@ export default function LeaderboardPage() {
       valB = (valB === undefined || valB === null ? (direction === 'asc' ? Infinity : -Infinity) : valB) as number;
       
       if (column === 'rank') { 
-        return (valA as number) - (valB as number);
+        // Rank is special: 'asc' means 1, 2, 3...
+        // If we want to sort by rank but show highest rank (e.g. last place) first, it would be 'desc' on the rank value itself
+        // However, default sort is by rank ascending.
+        return direction === 'asc' ? (valA as number) - (valB as number) : (valB as number) - (valA as number);
       }
+      // For points, higher is better, so 'desc' is the natural "good" sort.
+      // If direction is 'asc', we sort smaller points first. If 'desc', larger points first.
       return direction === 'asc' ? (valA as number) - (valB as number) : (valB as number) - (valA as number);
     });
   }, []);
@@ -79,15 +85,17 @@ export default function LeaderboardPage() {
 
 
   const handleSort = (column: SortableColumn) => {
-    let newDirection: SortDirection = 'asc'; 
-    if (column.startsWith('puntos_') || column === 'year') {
-      newDirection = 'desc'; 
-    }
-
+    let newDirection: SortDirection;
     if (sortColumn === column) {
       newDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      // Default sort directions for new columns
+      if (column === 'rank' || column === 'name' || column === 'year') {
+        newDirection = 'asc';
+      } else { // For points columns
+        newDirection = 'desc';
+      }
     }
-    
     setSortColumn(column);
     setSortDirection(newDirection);
     setExpandedParticipantId(null); 
@@ -159,7 +167,7 @@ export default function LeaderboardPage() {
                   <TableHead>
                      <SortableButton column="name">Nombre</SortableButton>
                   </TableHead>
-                  <TableHead>
+                  <TableHead className="text-center">
                     <SortableButton column="year">Año</SortableButton>
                   </TableHead>
                   <TableHead className="text-right">
@@ -186,7 +194,7 @@ export default function LeaderboardPage() {
                       <TableCell className="text-center">
                         {expandedParticipantId === entry.id ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                       </TableCell>
-                      <TableCell className="font-bold">{entry.rank}</TableCell>
+                      <TableCell className="font-bold text-center">{entry.rank}</TableCell>
                       <TableCell>
                         <Avatar>
                           <AvatarImage src={entry.photoUrl || undefined} alt={entry.name} data-ai-hint="person face" />
@@ -194,7 +202,7 @@ export default function LeaderboardPage() {
                         </Avatar>
                       </TableCell>
                       <TableCell className="font-medium">{entry.name}</TableCell>
-                      <TableCell>{entry.year}</TableCell>
+                      <TableCell className="text-center">{entry.year}</TableCell>
                       <TableCell className="text-right">{entry.puntos_fisico.toFixed(1)}</TableCell>
                       <TableCell className="text-right">{entry.puntos_mental.toFixed(1)}</TableCell>
                       <TableCell className="text-right">{entry.puntos_extras.toFixed(1)}</TableCell>
@@ -204,7 +212,17 @@ export default function LeaderboardPage() {
                       <TableRow className="bg-muted/10 hover:bg-muted/20 transition-colors">
                         <TableCell colSpan={9} className="p-0">
                           <div className="p-4 pl-[70px] border-l-4 border-primary/30 space-y-3"> 
-                            <h4 className="text-md font-semibold mb-2">Desglose (Última Puntuación del {new Date(entry.scoreRecordedAt).toLocaleDateString('es-ES')}):</h4>
+                            <div className="flex justify-between items-start">
+                                <h4 className="text-md font-semibold mb-2">Desglose (Última Puntuación del {new Date(entry.scoreRecordedAt).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })}):</h4>
+                                {entry.latestScoreId && (
+                                    <Link href={`/times?edit_score_id=${entry.latestScoreId}&participant_id=${entry.id}`} passHref>
+                                        <Button variant="outline" size="sm">
+                                            <Edit3 className="mr-2 h-4 w-4" />
+                                            Editar Esta Puntuación
+                                        </Button>
+                                    </Link>
+                                )}
+                            </div>
                             
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1 text-sm">
                                 <p>Tiempo Físico Bruto: <span className="font-medium">{entry.latest_tiempo_fisico.toFixed(2)} min</span> → P<sub>Físico</sub>: <span className="font-medium">{entry.puntos_fisico.toFixed(1)} pts</span></p>
@@ -227,7 +245,7 @@ export default function LeaderboardPage() {
                                             </li>
                                         ))}
                                         <li className="font-semibold">Subtotal Extras (Bruto): {entry.puntos_extras_cruda.toFixed(1)} pts</li>
-                                        <li className="font-semibold">P<sub>Extras</sub> Final (Limitado): {entry.puntos_extras.toFixed(1)} pts</li>
+                                        <li className="font-semibold">P<sub>Extras</sub> Final (Ajustado): {entry.puntos_extras.toFixed(1)} pts</li>
                                     </ul>
                                 </div>
                             )}
@@ -284,3 +302,5 @@ export default function LeaderboardPage() {
     </>
   );
 }
+
+    

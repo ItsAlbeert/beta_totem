@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useEffect, useState, useMemo } from "react";
@@ -29,8 +28,8 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const now = new Date();
-    setCurrentTime(now.toLocaleTimeString('es-ES'));
-    const timerId = setInterval(() => setCurrentTime(new Date().toLocaleTimeString('es-ES')), 1000);
+    setCurrentTime(now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+    const timerId = setInterval(() => setCurrentTime(new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' })), 1000);
     return () => clearInterval(timerId);
   }, []);
 
@@ -83,24 +82,37 @@ export default function DashboardPage() {
       
     const recentScoresData = recentScoresRaw.map(score => {
         let extraSummary = "N/A";
-        if (score.extraGameDetailedStatuses) {
+        if (score.extraGameDetailedStatuses && Object.keys(score.extraGameDetailedStatuses).length > 0) {
             const statuses = Object.values(score.extraGameDetailedStatuses);
             const muyBienCount = statuses.filter(s => s === 'muy_bien').length;
             const regularCount = statuses.filter(s => s === 'regular').length;
             const noHechoCount = statuses.filter(s => s === 'no_hecho').length;
-            const totalExtraEntries = statuses.length;
+            
+            const parts: string[] = [];
+            if (muyBienCount > 0) parts.push(`${muyBienCount} MB`);
+            if (regularCount > 0) parts.push(`${regularCount} R`);
+            if (noHechoCount > 0) parts.push(`${noHechoCount} NH`);
 
-            if (totalExtraEntries > 0) {
-                 extraSummary = `${muyBienCount} MB, ${regularCount} R, ${noHechoCount} NH`;
+            if (parts.length > 0) {
+                extraSummary = parts.join(', ');
+            } else if (statuses.length > 0) { // Should not happen if checks above are met, but as a fallback
+                extraSummary = `${statuses.length} Extras`;
             } else {
+                 extraSummary = "Sin detalle extra";
+            }
+        } else {
+            const definedExtraGamesCount = games.filter(g => g.category === 'Extra').length;
+            if (definedExtraGamesCount > 0) {
                 extraSummary = "Sin datos de juegos extra";
+            } else {
+                extraSummary = "No hay juegos extra definidos";
             }
         }
 
         return {
             ...score,
             participantName: participantsMap.get(score.participantId) || "Desconocido",
-            scoreSummary: `P_F: ${score.puntos_fisico?.toFixed(1) ?? 'N/A'}, P_M: ${score.puntos_mental?.toFixed(1) ?? 'N/A'}, Extras: ${extraSummary}, P_Total: ${score.puntos_total?.toFixed(1) ?? 'N/A'}`
+            scoreSummary: `T.Físico: ${score.tiempo_fisico.toFixed(1)} min, T.Mental: ${score.tiempo_mental.toFixed(1)} min, Extras: ${extraSummary}`
         };
     });
 

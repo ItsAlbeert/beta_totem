@@ -4,7 +4,9 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import React from "react";
+import React, { useEffect, useState } from "react"; // Ensured React is imported
+import { useRouter, useSearchParams } from 'next/navigation';
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -23,21 +25,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"; // Added CardDescription
 import { PageHeader } from "@/components/page-header";
 import { useToast } from "@/hooks/use-toast";
-import type { Participant, Score, Game, GameCategory, ExtraGameStatusDetail, ExtraGameType } from "@/types";
+import type { Participant, Score, Game, GameCategory, ExtraGameStatusDetail } from "@/types";
 import { Separator } from "@/components/ui/separator";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getParticipants, getGames, addScore } from "@/lib/firestore-services";
+import { getParticipants, getGames, addScore, getScoreById, updateScore } from "@/lib/firestore-services";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const timeInputSchema = z.object({
   participantId: z.string().min(1, "La selección de participante es obligatoria."),
   tiempo_fisico: z.coerce
-    .number({ invalid_type_error: "El tiempo físico debe ser un número." })
+    .number({ invalid_type_error: "El tiempo físico debe ser un número.", required_error: "El tiempo físico es obligatorio." })
     .min(0, "El tiempo físico no puede ser negativo."),
   tiempo_mental: z.coerce
-    .number({ invalid_type_error: "El tiempo mental debe ser un número." })
+    .number({ invalid_type_error: "El tiempo mental debe ser un número.", required_error: "El tiempo mental es obligatorio." })
     .min(0, "El tiempo mental no puede ser negativo."),
   gameTimes: z.record(z.string(), z.coerce.number().min(0, "El tiempo de juego no puede ser negativo.").optional()).optional(),
   extraGameDetailedStatuses: z.record(z.string(), z.enum(['muy_bien', 'regular', 'no_hecho'])).optional(),
@@ -48,6 +51,13 @@ type TimeInputFormValues = z.infer<typeof timeInputSchema>;
 export default function TimesPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const [editMode, setEditMode] = useState(false);
+  const [editingScoreId, setEditingScoreId] = useState<string | null>(null);
+  const [editingParticipantId, setEditingParticipantId] = useState<string | null>(null);
+
 
   const { data: participants = [], isLoading: isLoadingParticipants, error: errorParticipants } = useQuery<Participant[]>({
     queryKey: ["participants"],
@@ -69,6 +79,56 @@ export default function TimesPage() {
       extraGameDetailedStatuses: {},
     },
   });
+  
+  // Effect for handling edit mode from URL
+  useEffect(() => {
+    const scoreIdFromParams = searchParams.get('edit_score_id');
+    const participantIdFromParams = searchParams.get('participant_id');
+
+    if (scoreIdFromParams && participantIdFromParams) {
+      setEditMode(true);
+      setEditingScoreId(scoreIdFromParams);
+      setEditingParticipantId(participantIdFromParams);
+      form.setValue('participantId', participantIdFromParams); // Set participantId for the form
+    } else {
+      setEditMode(false);
+      setEditingScoreId(null);
+      setEditingParticipantId(null);
+    }
+  }, [searchParams, form]);
+
+  // Effect to fetch and pre-fill form if in edit mode
+  const { data: scoreToEdit, isLoading: isLoadingScoreToEdit, isError: isErrorScoreToEdit } = useQuery({
+    queryKey: ['scoreToEdit', editingScoreId],
+    queryFn: () => editingScoreId ? getScoreById(editingScoreId) : Promise.resolve(null),
+    enabled: !!editingScoreId, 
+  });
+
+  useEffect(() => {
+    if (editMode && scoreToEdit) {
+      form.reset({
+        participantId: scoreToEdit.participantId, // This should match editingParticipantId
+        tiempo_fisico: scoreToEdit.tiempo_fisico,
+        tiempo_mental: scoreToEdit.tiempo_mental,
+        gameTimes: scoreToEdit.gameTimes || {},
+        extraGameDetailedStatuses: scoreToEdit.extraGameDetailedStatuses || {},
+      });
+    } else if (!editMode) {
+      // Reset to default extra statuses when not in edit mode or games change
+       const defaultExtraStatuses: { [key: string]: ExtraGameStatusDetail } = {};
+        games.filter(g => g.category === 'Extra').forEach(g => {
+            defaultExtraStatuses[g.id] = 'no_hecho';
+        });
+        form.reset({ // Reset form but keep participantId if it was selected
+            participantId: form.getValues('participantId'),
+            tiempo_fisico: 0,
+            tiempo_mental: 0,
+            gameTimes: {},
+            extraGameDetailedStatuses: defaultExtraStatuses,
+        });
+    }
+  }, [editMode, scoreToEdit, form, games]);
+
 
   const addScoreMutation = useMutation({
     mutationFn: addScore,
@@ -81,12 +141,10 @@ export default function TimesPage() {
       queryClient.invalidateQueries({ queryKey: ["comparisonsData"] });
       queryClient.invalidateQueries({ queryKey: ["calculationsData"] });
 
-
       const participantName = participants.find(p => p.id === newScore.participantId)?.name || "Participante";
       toast({
         title: "¡Puntuación Registrada Correctamente!",
         description: `Datos brutos para ${participantName} guardados. Puntuaciones actualizadas globalmente.`,
-        variant: "default",
       });
       
       const defaultExtraStatuses: { [key: string]: ExtraGameStatusDetail } = {};
@@ -105,23 +163,56 @@ export default function TimesPage() {
     onError: (error) => {
       toast({
         title: "Error al registrar la puntuación",
-        description: error.message,
+        description: (error as Error).message,
         variant: "destructive",
       });
     },
   });
 
+  const updateScoreMutation = useMutation({
+    mutationFn: (data: { scoreId: string; values: TimeInputFormValues }) => {
+        // Ensure participantId is not part of the data sent for update to Firestore, as it's fixed.
+        const { participantId, ...updatableValues } = data.values;
+        return updateScore(data.scoreId, updatableValues as Pick<Score, 'tiempo_fisico' | 'tiempo_mental' | 'gameTimes' | 'extraGameDetailedStatuses'>);
+    },
+    onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["scores"] });
+        queryClient.invalidateQueries({ queryKey: ["recentScores"] });
+        queryClient.invalidateQueries({ queryKey: ["dashboardData"] });
+        queryClient.invalidateQueries({ queryKey: ["leaderboardData"] });
+        queryClient.invalidateQueries({ queryKey: ["trendsData"] });
+        queryClient.invalidateQueries({ queryKey: ["comparisonsData"] });
+        queryClient.invalidateQueries({ queryKey: ["calculationsData"] });
+        queryClient.invalidateQueries({ queryKey: ['scoreToEdit', editingScoreId] });
+
+
+        toast({
+            title: "Puntuación Actualizada",
+            description: "Los datos de la puntuación han sido actualizados con éxito.",
+        });
+        router.push('/statistics/leaderboard'); 
+    },
+    onError: (error) => {
+        toast({
+            title: "Error al actualizar la puntuación",
+            description: (error as Error).message,
+            variant: "destructive",
+        });
+    },
+  });
+
+
   React.useEffect(() => {
-    if (games.length > 0) {
+    if (games.length > 0 && !editMode) { // Only set defaults if not in edit mode and games are loaded
       const initialExtraStatuses: { [key: string]: ExtraGameStatusDetail } = {};
       games.filter(g => g.category === 'Extra').forEach(g => {
         initialExtraStatuses[g.id] = 'no_hecho'; 
       });
       
       const currentExtraStatuses = form.getValues('extraGameDetailedStatuses');
-      const hasUserSetExtraStatus = Object.values(currentExtraStatuses || {}).some(status => status !== 'no_hecho');
+      const hasUserSetExtraStatus = currentExtraStatuses && Object.values(currentExtraStatuses).some(status => status !== 'no_hecho');
 
-      if (!hasUserSetExtraStatus || Object.keys(currentExtraStatuses || {}).length === 0) {
+      if (!hasUserSetExtraStatus || !currentExtraStatuses || Object.keys(currentExtraStatuses).length === 0) {
          form.reset((currentValues) => ({
            ...currentValues,
            extraGameDetailedStatuses: initialExtraStatuses,
@@ -131,40 +222,50 @@ export default function TimesPage() {
         form.setValue('extraGameDetailedStatuses', updatedStatuses);
       }
     }
-  }, [games, form]);
+  }, [games, form, editMode]);
 
 
   async function onSubmit(values: TimeInputFormValues) {
-    const selectedParticipant = participants.find(p => p.id === values.participantId);
-    if (!selectedParticipant) {
-      toast({
-        title: "Error",
-        description: "Participante seleccionado no encontrado.",
-        variant: "destructive",
-      });
-      return;
+    if (editMode && editingScoreId) {
+        updateScoreMutation.mutate({ scoreId: editingScoreId, values });
+    } else {
+        const newScoreData = {
+        ...values,
+        recordedAt: new Date(),
+        };
+        addScoreMutation.mutate(newScoreData);
     }
-    
-    const finalExtraStatuses: { [key: string]: ExtraGameStatusDetail } = {};
-    games.filter(g => g.category === 'Extra').forEach(g => {
-      finalExtraStatuses[g.id] = values.extraGameDetailedStatuses?.[g.id] || 'no_hecho';
-    });
-
-    const newScoreData: Omit<Score, 'id' | 'puntos_fisico' | 'puntos_mental' | 'puntos_extras' | 'puntos_total' | 'puntos_extras_cruda' | 'individual_extra_game_points'> & { recordedAt: Date } = {
-      participantId: values.participantId,
-      tiempo_fisico: values.tiempo_fisico,
-      tiempo_mental: values.tiempo_mental,
-      gameTimes: values.gameTimes || {},
-      extraGameDetailedStatuses: finalExtraStatuses, 
-      recordedAt: new Date(),
-    };
-    
-    addScoreMutation.mutate(newScoreData);
   }
   
-  if (errorParticipants || errorGames) {
+  if (errorParticipants || errorGames || (editMode && isErrorScoreToEdit)) {
     return <p className="text-destructive text-center py-8">Error al cargar los datos de la página.</p>;
   }
+
+  if (isLoadingParticipants || isLoadingGames || (editMode && isLoadingScoreToEdit && !scoreToEdit)) {
+    return (
+        <>
+        <PageHeader
+            title={editMode ? "Editar Puntuación" : "Registrar Tiempos y Estados"}
+            description={editMode ? "Modifica los detalles de la puntuación." : "Introduce tiempos totales físicos, mentales y estados para los desafíos extra."}
+        />
+        <Card className="max-w-2xl mx-auto shadow-lg">
+            <CardHeader>
+                <Skeleton className="h-8 w-3/5" />
+                <Skeleton className="h-4 w-4/5 mt-1" />
+            </CardHeader>
+            <CardContent className="space-y-6">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+                <div className="flex justify-end">
+                    <Skeleton className="h-10 w-24" />
+                </div>
+            </CardContent>
+        </Card>
+        </>
+    );
+  }
+
 
   const renderGameTimeFields = (category: GameCategory) => {
     const categoryGames = games.filter(game => game.category === category);
@@ -189,7 +290,7 @@ export default function TimesPage() {
                     value={field.value ?? ''} 
                     onChange={e => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))} 
                     step="any"
-                    disabled={addScoreMutation.isPending || isLoadingGames}
+                    disabled={addScoreMutation.isPending || updateScoreMutation.isPending || isLoadingGames}
                   />
                 </FormControl>
                 <FormMessage />
@@ -227,7 +328,7 @@ export default function TimesPage() {
                 <Select
                   onValueChange={field.onChange}
                   value={field.value}
-                  disabled={addScoreMutation.isPending || isLoadingGames}
+                  disabled={addScoreMutation.isPending || updateScoreMutation.isPending || isLoadingGames}
                 >
                   <FormControl>
                     <SelectTrigger>
@@ -253,12 +354,17 @@ export default function TimesPage() {
   return (
     <>
       <PageHeader
-        title="Registrar Tiempos y Estados"
-        description="Introduce tiempos totales físicos, mentales y estados para los desafíos extra."
+        title={editMode ? "Editar Puntuación" : "Registrar Tiempos y Estados"}
+        description={editMode ? "Modifica los detalles de la puntuación existente." : "Introduce tiempos totales físicos, mentales y estados para los desafíos extra."}
       />
       <Card className="max-w-2xl mx-auto shadow-lg hover:shadow-xl transition-shadow duration-300">
         <CardHeader>
-          <CardTitle>Nueva Entrada de Puntuación</CardTitle>
+          <CardTitle>{editMode ? "Actualizar Entrada de Puntuación" : "Nueva Entrada de Puntuación"}</CardTitle>
+          {editMode && scoreToEdit && participants.find(p => p.id === scoreToEdit.participantId) && (
+            <CardDescription>
+                Editando la puntuación de: <strong>{participants.find(p => p.id === scoreToEdit.participantId)?.name}</strong> registrada el {new Date(scoreToEdit.recordedAt).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}.
+            </CardDescription>
+          )}
         </CardHeader>
         <CardContent>
           <Form {...form}>
@@ -272,7 +378,7 @@ export default function TimesPage() {
                     <Select 
                       onValueChange={field.onChange} 
                       value={field.value}
-                      disabled={isLoadingParticipants || addScoreMutation.isPending}
+                      disabled={isLoadingParticipants || addScoreMutation.isPending || updateScoreMutation.isPending || editMode} // Disable if editing
                     >
                       <FormControl>
                         <SelectTrigger>
@@ -307,10 +413,10 @@ export default function TimesPage() {
                   <FormItem>
                     <FormLabel>Tiempo Total Desafío Físico (minutos)</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="ej., 240.5" {...field} step="any" disabled={addScoreMutation.isPending} />
+                      <Input type="number" placeholder="ej., 240.5" {...field} step="any" disabled={addScoreMutation.isPending || updateScoreMutation.isPending} />
                     </FormControl>
                     <FormDescription>
-                      Tiempo total para todos los desafíos físicos. (ej. 220 para 100pts, 360 para 30pts)
+                      Tiempo total para todos los desafíos físicos. (ej. ≤220 para 100pts, ≥360 para 30pts)
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -327,10 +433,10 @@ export default function TimesPage() {
                   <FormItem>
                     <FormLabel>Tiempo Total Desafío Mental (minutos)</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="ej., 60" {...field} step="any" disabled={addScoreMutation.isPending}/>
+                      <Input type="number" placeholder="ej., 60" {...field} step="any" disabled={addScoreMutation.isPending || updateScoreMutation.isPending}/>
                     </FormControl>
                     <FormDescription>
-                      Tiempo total para todos los desafíos mentales. (ej. 50 para 100pts, 120 para 30pts)
+                      Tiempo total para todos los desafíos mentales. (ej. ≤50 para 100pts, ≥120 para 30pts)
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -344,13 +450,18 @@ export default function TimesPage() {
               
               <Separator />
               
-              <div className="flex justify-end">
+              <div className="flex justify-end space-x-2">
+                 {editMode && (
+                    <Button type="button" variant="outline" onClick={() => router.back()} disabled={updateScoreMutation.isPending}>
+                        Cancelar
+                    </Button>
+                 )}
                 <Button 
                   type="submit" 
                   className="bg-primary hover:bg-primary/90 text-primary-foreground" 
-                  disabled={addScoreMutation.isPending || participants.length === 0 || isLoadingParticipants || isLoadingGames}
+                  disabled={addScoreMutation.isPending || updateScoreMutation.isPending || participants.length === 0 || isLoadingParticipants || isLoadingGames || (editMode && isLoadingScoreToEdit)}
                 >
-                  {addScoreMutation.isPending ? "Guardando..." : "Guardar Datos"}
+                  {addScoreMutation.isPending || updateScoreMutation.isPending ? "Guardando..." : (editMode ? "Actualizar Puntuación" : "Guardar Datos")}
                 </Button>
               </div>
             </form>
@@ -360,3 +471,5 @@ export default function TimesPage() {
     </>
   );
 }
+
+    
