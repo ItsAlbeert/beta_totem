@@ -33,8 +33,8 @@ export default function ParticipantsPage() {
     onSuccess: (newParticipant) => {
       queryClient.invalidateQueries({ queryKey: ["participants"] });
       toast({
-        title: "Participant Added",
-        description: `${newParticipant.name} has been added.`,
+        title: "Participante Añadido",
+        description: `${newParticipant.name} ha sido añadido.`,
       });
       setNewName("");
       setNewYear(1);
@@ -44,7 +44,7 @@ export default function ParticipantsPage() {
     },
     onError: (error) => {
       toast({
-        title: "Error adding participant",
+        title: "Error al añadir participante",
         description: error.message,
         variant: "destructive",
       });
@@ -55,17 +55,17 @@ export default function ParticipantsPage() {
     mutationFn: deleteParticipant,
     onSuccess: (_, deletedParticipantId) => {
       queryClient.invalidateQueries({ queryKey: ["participants"] });
-      queryClient.invalidateQueries({ queryKey: ["scores"] }); // Scores might be linked
-      const deletedName = participants.find(p => p.id === deletedParticipantId)?.name || "Participant";
+      queryClient.invalidateQueries({ queryKey: ["scores"] }); 
+      const deletedName = participants.find(p => p.id === deletedParticipantId)?.name || "Participante";
       toast({
-        title: "Participant Deleted",
-        description: `${deletedName} and their scores have been removed.`,
+        title: "Participante Eliminado",
+        description: `${deletedName} y sus puntuaciones han sido eliminados.`,
         variant: "destructive",
       });
     },
     onError: (error) => {
       toast({
-        title: "Error deleting participant",
+        title: "Error al eliminar participante",
         description: error.message,
         variant: "destructive",
       });
@@ -78,7 +78,7 @@ export default function ParticipantsPage() {
     if (!newName || !newYear) {
       toast({
         title: "Error",
-        description: "Name and year are required.",
+        description: "Nombre y año son obligatorios.",
         variant: "destructive",
       });
       return;
@@ -88,7 +88,7 @@ export default function ParticipantsPage() {
     if (isNaN(numericYear) || ![1, 2, 3].includes(numericYear)) {
          toast({
             title: "Error",
-            description: "Year must be 1, 2, or 3.",
+            description: "El año debe ser 1, 2, o 3.",
             variant: "destructive",
         });
         return;
@@ -115,7 +115,7 @@ export default function ParticipantsPage() {
       reader.onerror = () => {
         toast({
           title: "Error",
-          description: "Could not read the photo file.",
+          description: "No se pudo leer el archivo de la foto.",
           variant: "destructive",
         });
          processAddition(); 
@@ -133,25 +133,25 @@ export default function ParticipantsPage() {
   return (
     <>
       <PageHeader
-        title="Participants"
-        description="View and manage registered participants in the competition."
+        title="Participantes"
+        description="Ver y gestionar los participantes registrados en la competición."
       />
 
       <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 mb-6">
         <CardHeader>
-          <CardTitle>Add New Participant</CardTitle>
+          <CardTitle>Añadir Nuevo Participante</CardTitle>
           <CardDescription>
-            Fill in the details below to add a new participant.
+            Completa los detalles para añadir un nuevo participante.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid w-full max-w-sm items-center gap-1.5">
-              <Label htmlFor="name">Name</Label>
+              <Label htmlFor="name">Nombre</Label>
               <Input
                 type="text"
                 id="name"
-                placeholder="Participant Name"
+                placeholder="Nombre del Participante"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 required
@@ -159,11 +159,11 @@ export default function ParticipantsPage() {
               />
             </div>
             <div className="grid w-full max-w-sm items-center gap-1.5">
-              <Label htmlFor="year">Year (1, 2, or 3)</Label>
+              <Label htmlFor="year">Año (1, 2, o 3)</Label>
               <Input
                 type="number"
                 id="year"
-                placeholder="e.g., 1"
+                placeholder="ej., 1"
                 value={newYear === "" ? "" : newYear} 
                 onChange={(e) => {
                     const val = e.target.value;
@@ -185,7 +185,7 @@ export default function ParticipantsPage() {
               />
             </div>
             <div className="grid w-full max-w-sm items-center gap-1.5">
-              <Label htmlFor="photo">Photo</Label>
+              <Label htmlFor="photo">Foto</Label>
               <Input
                 type="file"
                 id="photo"
@@ -195,7 +195,7 @@ export default function ParticipantsPage() {
               />
             </div>
             <Button type="submit" disabled={addParticipantMutation.isPending}>
-              {addParticipantMutation.isPending ? "Adding..." : "Add Participant"}
+              {addParticipantMutation.isPending ? "Añadiendo..." : "Añadir Participante"}
             </Button>
           </form>
         </CardContent>
@@ -203,9 +203,9 @@ export default function ParticipantsPage() {
 
       <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
         <CardHeader>
-          <CardTitle>Participant List</CardTitle>
+          <CardTitle>Lista de Participantes</CardTitle>
           <CardDescription>
-            A list of all participants.
+            Una lista de todos los participantes.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -225,10 +225,10 @@ export default function ParticipantsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[80px]">Photo</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Year</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead className="w-[80px]">Foto</TableHead>
+                  <TableHead>Nombre</TableHead>
+                  <TableHead>Año</TableHead>
+                  <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -249,7 +249,7 @@ export default function ParticipantsPage() {
                         onClick={() => handleDelete(participant.id)}
                         disabled={deleteParticipantMutation.isPending && deleteParticipantMutation.variables === participant.id}
                       >
-                        {(deleteParticipantMutation.isPending && deleteParticipantMutation.variables === participant.id) ? "Deleting..." : "Delete"}
+                        {(deleteParticipantMutation.isPending && deleteParticipantMutation.variables === participant.id) ? "Eliminando..." : "Eliminar"}
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -258,7 +258,7 @@ export default function ParticipantsPage() {
             </Table>
           )}
            {participants.length === 0 && !isLoadingParticipants && (
-            <p className="text-center text-muted-foreground py-8">No participants found. Add some using the form above!</p>
+            <p className="text-center text-muted-foreground py-8">No se encontraron participantes. ¡Añade algunos usando el formulario de arriba!</p>
           )}
         </CardContent>
       </Card>

@@ -45,7 +45,7 @@ export default function GamesPage() {
     },
     onSuccess: (mutatedGame) => {
       queryClient.invalidateQueries({ queryKey: ["games"] });
-      queryClient.invalidateQueries({ queryKey: ["scores"] }); // Invalidate scores as game definitions affect calculations
+      queryClient.invalidateQueries({ queryKey: ["scores"] }); 
       queryClient.invalidateQueries({ queryKey: ["dashboardData"] });
       queryClient.invalidateQueries({ queryKey: ["leaderboardData"] });
       queryClient.invalidateQueries({ queryKey: ["trendsData"] });
@@ -53,14 +53,14 @@ export default function GamesPage() {
       queryClient.invalidateQueries({ queryKey: ["calculationsData"] });
       
       toast({
-        title: isEditing ? "Game Updated" : "Game Added",
-        description: `${mutatedGame.name} has been ${isEditing ? 'updated' : 'added'}.`,
+        title: isEditing ? "Juego Actualizado" : "Juego Añadido",
+        description: `${mutatedGame.name} ha sido ${isEditing ? 'actualizado' : 'añadido'}.`,
       });
       resetForm();
     },
     onError: (error) => {
       toast({
-        title: isEditing ? "Error updating game" : "Error adding game",
+        title: isEditing ? "Error al actualizar juego" : "Error al añadir juego",
         description: error.message,
         variant: "destructive",
       });
@@ -78,16 +78,16 @@ export default function GamesPage() {
       queryClient.invalidateQueries({ queryKey: ["comparisonsData"] });
       queryClient.invalidateQueries({ queryKey: ["calculationsData"] });
 
-      const deletedName = games.find(g => g.id === deletedGameId)?.name || "Game";
+      const deletedName = games.find(g => g.id === deletedGameId)?.name || "Juego";
       toast({
-        title: "Game Deleted",
-        description: `${deletedName} has been removed.`,
+        title: "Juego Eliminado",
+        description: `${deletedName} ha sido eliminado.`,
         variant: "destructive",
       });
     },
     onError: (error) => {
       toast({
-        title: "Error deleting game",
+        title: "Error al eliminar juego",
         description: error.message,
         variant: "destructive",
       });
@@ -112,7 +112,7 @@ export default function GamesPage() {
     if (game.category === 'Extra') {
       setNewGameExtraType(game.extraType || 'opcional');
     } else {
-      setNewGameExtraType('opcional'); // Reset if not extra
+      setNewGameExtraType('opcional'); 
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -123,7 +123,7 @@ export default function GamesPage() {
     if (!newGameName || !newGameCategory) {
       toast({
         title: "Error",
-        description: "Game name and category are required.",
+        description: "Nombre y categoría del juego son obligatorios.",
         variant: "destructive",
       });
       return;
@@ -138,7 +138,7 @@ export default function GamesPage() {
     if (newGameCategory === "Extra") {
       gameData.extraType = newGameExtraType;
     } else {
-      delete gameData.extraType; // Ensure extraType is not set for non-Extra games
+      delete gameData.extraType; 
     }
     
     gameMutation.mutate({ id: editingGameId || undefined, data: gameData });
@@ -149,34 +149,34 @@ export default function GamesPage() {
   };
   
   if (errorGames) {
-    return <p className="text-destructive text-center py-8">Error loading games: {(errorGames as Error).message}</p>;
+    return <p className="text-destructive text-center py-8">Error al cargar los juegos: {(errorGames as Error).message}</p>;
   }
 
 
   return (
     <>
       <PageHeader
-        title="Manage Games"
-        description="Add, view, and manage games for the competition."
+        title="Gestionar Juegos"
+        description="Añadir, ver y gestionar los juegos de la competición."
       >
         <Puzzle className="w-8 h-8 text-primary" />
       </PageHeader>
 
       <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 mb-6">
         <CardHeader>
-          <CardTitle>{isEditing ? "Edit Game" : "Add New Game"}</CardTitle>
+          <CardTitle>{isEditing ? "Editar Juego" : "Añadir Nuevo Juego"}</CardTitle>
           <CardDescription>
-            {isEditing ? "Update the details of the game below." : "Fill in the details below to add a new game."}
+            {isEditing ? "Actualiza los detalles del juego." : "Completa los detalles para añadir un nuevo juego."}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid w-full max-w-sm items-center gap-1.5">
-              <Label htmlFor="gameName">Name</Label>
+              <Label htmlFor="gameName">Nombre</Label>
               <Input
                 type="text"
                 id="gameName"
-                placeholder="Game Name"
+                placeholder="Nombre del Juego"
                 value={newGameName}
                 onChange={(e) => setNewGameName(e.target.value)}
                 required
@@ -184,10 +184,10 @@ export default function GamesPage() {
               />
             </div>
             <div className="grid w-full items-center gap-1.5">
-              <Label htmlFor="gameDescription">Description</Label>
+              <Label htmlFor="gameDescription">Descripción</Label>
               <Textarea
                 id="gameDescription"
-                placeholder="Brief description of the game"
+                placeholder="Breve descripción del juego"
                 value={newGameDescription}
                 onChange={(e) => setNewGameDescription(e.target.value)}
                 disabled={gameMutation.isPending}
@@ -195,17 +195,17 @@ export default function GamesPage() {
               />
             </div>
             <div className="grid w-full max-w-sm items-center gap-1.5">
-              <Label htmlFor="gameCategory">Category</Label>
+              <Label htmlFor="gameCategory">Categoría</Label>
               <Select 
                 value={newGameCategory} 
                 onValueChange={(value) => setNewGameCategory(value as GameCategory)}
                 disabled={gameMutation.isPending}
               >
                 <SelectTrigger id="gameCategory">
-                  <SelectValue placeholder="Select category" />
+                  <SelectValue placeholder="Seleccionar categoría" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Physical">Physical</SelectItem>
+                  <SelectItem value="Physical">Físico</SelectItem>
                   <SelectItem value="Mental">Mental</SelectItem>
                   <SelectItem value="Extra">Extra</SelectItem>
                 </SelectContent>
@@ -214,14 +214,14 @@ export default function GamesPage() {
 
             {newGameCategory === "Extra" && (
               <div className="grid w-full max-w-sm items-center gap-1.5">
-                <Label htmlFor="gameExtraType">Extra Game Type</Label>
+                <Label htmlFor="gameExtraType">Tipo de Juego Extra</Label>
                 <Select
                   value={newGameExtraType}
                   onValueChange={(value) => setNewGameExtraType(value as ExtraGameType)}
                   disabled={gameMutation.isPending}
                 >
                   <SelectTrigger id="gameExtraType">
-                    <SelectValue placeholder="Select extra type" />
+                    <SelectValue placeholder="Seleccionar tipo de extra" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="opcional">Opcional</SelectItem>
@@ -232,11 +232,11 @@ export default function GamesPage() {
             )}
             <div className="flex space-x-2">
                 <Button type="submit" disabled={gameMutation.isPending}>
-                {gameMutation.isPending ? (isEditing ? "Updating..." : "Adding...") : (isEditing ? "Update Game" : "Add Game")}
+                {gameMutation.isPending ? (isEditing ? "Actualizando..." : "Añadiendo...") : (isEditing ? "Actualizar Juego" : "Añadir Juego")}
                 </Button>
                 {isEditing && (
                 <Button type="button" variant="outline" onClick={resetForm} disabled={gameMutation.isPending}>
-                    Cancel Edit
+                    Cancelar Edición
                 </Button>
                 )}
             </div>
@@ -246,9 +246,9 @@ export default function GamesPage() {
 
       <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
         <CardHeader>
-          <CardTitle>Game List</CardTitle>
+          <CardTitle>Lista de Juegos</CardTitle>
           <CardDescription>
-            A list of all defined games. Click "Edit" to modify a game.
+            Lista de todos los juegos definidos. Haz clic en "Editar" para modificar un juego.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -269,11 +269,11 @@ export default function GamesPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead>Type (Extra)</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>Nombre</TableHead>
+                  <TableHead>Descripción</TableHead>
+                  <TableHead>Categoría</TableHead>
+                  <TableHead>Tipo (Extra)</TableHead>
+                  <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -281,8 +281,8 @@ export default function GamesPage() {
                   <TableRow key={game.id}>
                     <TableCell className="font-medium">{game.name}</TableCell>
                     <TableCell className="max-w-xs truncate" title={game.description}>{game.description}</TableCell>
-                    <TableCell>{game.category}</TableCell>
-                    <TableCell>{game.category === 'Extra' ? game.extraType : 'N/A'}</TableCell>
+                    <TableCell>{game.category === "Physical" ? "Físico" : game.category === "Mental" ? "Mental" : "Extra"}</TableCell>
+                    <TableCell>{game.category === 'Extra' ? (game.extraType === "opcional" ? "Opcional" : "Obligatoria") : 'N/A'}</TableCell>
                     <TableCell className="text-right space-x-2">
                        <Button
                         variant="outline"
@@ -290,7 +290,7 @@ export default function GamesPage() {
                         onClick={() => handleEdit(game)}
                         disabled={gameMutation.isPending || deleteGameMutation.isPending}
                       >
-                        Edit
+                        Editar
                       </Button>
                       <Button
                         variant="destructive"
@@ -298,7 +298,7 @@ export default function GamesPage() {
                         onClick={() => handleDelete(game.id)}
                         disabled={deleteGameMutation.isPending && deleteGameMutation.variables === game.id || gameMutation.isPending}
                       >
-                        {(deleteGameMutation.isPending && deleteGameMutation.variables === game.id) ? "Deleting..." : "Delete"}
+                        {(deleteGameMutation.isPending && deleteGameMutation.variables === game.id) ? "Eliminando..." : "Eliminar"}
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -307,7 +307,7 @@ export default function GamesPage() {
             </Table>
           )}
            {games.length === 0 && !isLoadingGames && !errorGames && (
-            <p className="text-center text-muted-foreground py-8">No games found. Add some using the form above!</p>
+            <p className="text-center text-muted-foreground py-8">No se encontraron juegos. ¡Añade algunos usando el formulario de arriba!</p>
           )}
         </CardContent>
       </Card>

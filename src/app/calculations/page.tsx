@@ -40,7 +40,12 @@ export default function CalculationsPage() {
 
   const getExtraGameStatusText = (status: ExtraGameStatusDetail | undefined): string => {
     if (!status) return "N/A";
-    return status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()); // Capitalize each word
+    switch (status) {
+      case 'muy_bien': return 'Muy Bien';
+      case 'regular': return 'Regular';
+      case 'no_hecho': return 'No Hecho';
+      default: return status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    }
   };
 
   const getExtraGamePointsText = (points: number | undefined): string => {
@@ -49,7 +54,7 @@ export default function CalculationsPage() {
   };
 
   if (overallError) {
-    return <p className="text-destructive text-center py-8">Error loading calculation data: {(overallError as Error).message}</p>;
+    return <p className="text-destructive text-center py-8">Error al cargar los datos de cálculo: {(overallError as Error).message}</p>;
   }
 
   const definedExtraGames = games.filter(g => g.category === 'Extra');
@@ -57,14 +62,14 @@ export default function CalculationsPage() {
   return (
     <>
       <PageHeader
-        title="Score Calculation Breakdown"
-        description="Transparent view of how raw inputs translate to final scores based on the current system."
+        title="Desglose del Cálculo de Puntuaciones"
+        description="Visión transparente de cómo los datos brutos se traducen en puntuaciones finales según el sistema actual."
       />
       <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
         <CardHeader>
-          <CardTitle>Detailed Calculations (New System)</CardTitle>
+          <CardTitle>Cálculos Detallados (Nuevo Sistema)</CardTitle>
           <CardDescription>
-            P<sub>Físico</sub> (max 100, min 30), P<sub>Mental</sub> (max 100, min 30), P<sub>Extras</sub> (max +30, min -10). P<sub>Total</sub> = Sum.
+            P<sub>Físico</sub> (máx 100, mín 30), P<sub>Mental</sub> (máx 100, mín 30), P<sub>Extras</sub> (máx +30, mín -10). P<sub>Total</sub> = Suma.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -80,14 +85,14 @@ export default function CalculationsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[50px]">Rank</TableHead>
-                    <TableHead className="w-[60px]">Photo</TableHead>
-                    <TableHead>Name</TableHead>
+                    <TableHead className="w-[50px]">Clasif.</TableHead>
+                    <TableHead className="w-[60px]">Foto</TableHead>
+                    <TableHead>Nombre</TableHead>
                     <TableHead className="text-center">T<sub>Físico</sub> (min)</TableHead>
                     <TableHead className="text-center">P<sub>Físico</sub></TableHead>
                     <TableHead className="text-center">T<sub>Mental</sub> (min)</TableHead>
                     <TableHead className="text-center">P<sub>Mental</sub></TableHead>
-                    <TableHead className="min-w-[200px]">Extra Games Status & Points</TableHead>
+                    <TableHead className="min-w-[200px]">Estado y Puntos de Juegos Extra</TableHead>
                     <TableHead className="text-center">P<sub>Extras</sub> (Cruda)</TableHead>
                     <TableHead className="text-center">P<sub>Extras</sub> (Final)</TableHead>
                     <TableHead className="text-center font-semibold">P<sub>Total</sub></TableHead>
@@ -103,7 +108,7 @@ export default function CalculationsPage() {
                           <AvatarFallback>{entry.name.substring(0, 2).toUpperCase()}</AvatarFallback>
                         </Avatar>
                       </TableCell>
-                      <TableCell>{entry.name} <span className="text-xs text-muted-foreground">(Y{entry.year})</span></TableCell>
+                      <TableCell>{entry.name} <span className="text-xs text-muted-foreground">(Año {entry.year})</span></TableCell>
                       <TableCell className="text-center">{entry.latest_tiempo_fisico.toFixed(2)}</TableCell>
                       <TableCell className="text-center text-lg font-medium">{entry.puntos_fisico.toFixed(1)}</TableCell>
                       <TableCell className="text-center">{entry.latest_tiempo_mental.toFixed(2)}</TableCell>
@@ -123,7 +128,7 @@ export default function CalculationsPage() {
                                     </span>
                                 </div>
                             ))
-                        ) : "No Extra Games"}
+                        ) : "Sin Juegos Extra"}
                       </TableCell>
                       <TableCell className="text-center">{entry.puntos_extras_cruda.toFixed(1)}</TableCell>
                       <TableCell className="text-center text-lg font-medium">{entry.puntos_extras.toFixed(1)}</TableCell>
@@ -135,7 +140,7 @@ export default function CalculationsPage() {
             </ScrollArea>
           )}
           {calculationData.length === 0 && !isLoadingOverall && !overallError && (
-            <p className="text-center text-muted-foreground py-8">No calculation data available. Add participants and record their scores.</p>
+            <p className="text-center text-muted-foreground py-8">No hay datos de cálculo disponibles. Añade participantes y registra sus puntuaciones.</p>
           )}
         </CardContent>
       </Card>

@@ -32,14 +32,14 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getParticipants, getGames, addScore } from "@/lib/firestore-services";
 
 const timeInputSchema = z.object({
-  participantId: z.string().min(1, "Participant selection is required."),
+  participantId: z.string().min(1, "La selección de participante es obligatoria."),
   tiempo_fisico: z.coerce
-    .number({ invalid_type_error: "Physical time must be a number." })
-    .min(0, "Physical time cannot be negative."),
+    .number({ invalid_type_error: "El tiempo físico debe ser un número." })
+    .min(0, "El tiempo físico no puede ser negativo."),
   tiempo_mental: z.coerce
-    .number({ invalid_type_error: "Mental time must be a number." })
-    .min(0, "Mental time cannot be negative."),
-  gameTimes: z.record(z.string(), z.coerce.number().min(0, "Game time cannot be negative.").optional()).optional(),
+    .number({ invalid_type_error: "El tiempo mental debe ser un número." })
+    .min(0, "El tiempo mental no puede ser negativo."),
+  gameTimes: z.record(z.string(), z.coerce.number().min(0, "El tiempo de juego no puede ser negativo.").optional()).optional(),
   extraGameDetailedStatuses: z.record(z.string(), z.enum(['muy_bien', 'regular', 'no_hecho'])).optional(),
 });
 
@@ -82,10 +82,10 @@ export default function TimesPage() {
       queryClient.invalidateQueries({ queryKey: ["calculationsData"] });
 
 
-      const participantName = participants.find(p => p.id === newScore.participantId)?.name || "Participant";
+      const participantName = participants.find(p => p.id === newScore.participantId)?.name || "Participante";
       toast({
-        title: "Score Recorded Successfully!",
-        description: `Raw data for ${participantName} saved. Scores updated globally.`,
+        title: "¡Puntuación Registrada Correctamente!",
+        description: `Datos brutos para ${participantName} guardados. Puntuaciones actualizadas globalmente.`,
         variant: "default",
       });
       
@@ -104,7 +104,7 @@ export default function TimesPage() {
     },
     onError: (error) => {
       toast({
-        title: "Error recording score",
+        title: "Error al registrar la puntuación",
         description: error.message,
         variant: "destructive",
       });
@@ -139,7 +139,7 @@ export default function TimesPage() {
     if (!selectedParticipant) {
       toast({
         title: "Error",
-        description: "Selected participant not found.",
+        description: "Participante seleccionado no encontrado.",
         variant: "destructive",
       });
       return;
@@ -150,7 +150,7 @@ export default function TimesPage() {
       finalExtraStatuses[g.id] = values.extraGameDetailedStatuses?.[g.id] || 'no_hecho';
     });
 
-    const newScoreData = {
+    const newScoreData: Omit<Score, 'id' | 'puntos_fisico' | 'puntos_mental' | 'puntos_extras' | 'puntos_total' | 'puntos_extras_cruda' | 'individual_extra_game_points'> & { recordedAt: Date } = {
       participantId: values.participantId,
       tiempo_fisico: values.tiempo_fisico,
       tiempo_mental: values.tiempo_mental,
@@ -163,7 +163,7 @@ export default function TimesPage() {
   }
   
   if (errorParticipants || errorGames) {
-    return <p className="text-destructive text-center py-8">Error loading page data.</p>;
+    return <p className="text-destructive text-center py-8">Error al cargar los datos de la página.</p>;
   }
 
   const renderGameTimeFields = (category: GameCategory) => {
@@ -172,7 +172,7 @@ export default function TimesPage() {
 
     return (
       <div className="mt-4 space-y-4">
-        <h4 className="text-md font-semibold text-muted-foreground">{category} Games Times (Optional Individual Logging)</h4>
+        <h4 className="text-md font-semibold text-muted-foreground">Tiempos de Juegos {category === 'Physical' ? 'Físicos' : 'Mentales'} (Registro Individual Opcional)</h4>
         {categoryGames.map(game => (
           <FormField
             key={game.id}
@@ -180,11 +180,11 @@ export default function TimesPage() {
             name={`gameTimes.${game.id}`}
             render={({ field }) => (
               <FormItem className="ml-4">
-                <FormLabel>{game.name} (minutes)</FormLabel>
+                <FormLabel>{game.name} (minutos)</FormLabel>
                 <FormControl>
                   <Input 
                     type="number" 
-                    placeholder="e.g., 10" 
+                    placeholder="ej., 10" 
                     {...field} 
                     value={field.value ?? ''} 
                     onChange={e => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))} 
@@ -206,15 +206,15 @@ export default function TimesPage() {
     if (extraGames.length === 0) {
         return (
             <div className="mt-4">
-                <h4 className="text-md font-semibold text-muted-foreground">Extra Games Status</h4>
-                <p className="text-sm text-muted-foreground ml-4 mt-2">No "Extra" games defined. Add them on the Games page.</p>
+                <h4 className="text-md font-semibold text-muted-foreground">Estado de Juegos Extra</h4>
+                <p className="text-sm text-muted-foreground ml-4 mt-2">No hay juegos "Extra" definidos. Añádelos en la página de Juegos.</p>
             </div>
         );
     }
 
     return (
       <div className="mt-4 space-y-4">
-        <h4 className="text-md font-semibold text-muted-foreground">Extra Games Status</h4>
+        <h4 className="text-md font-semibold text-muted-foreground">Estado de Juegos Extra</h4>
         {extraGames.map(game => (
           <FormField
             key={game.id}
@@ -223,7 +223,7 @@ export default function TimesPage() {
             defaultValue={'no_hecho' as ExtraGameStatusDetail} 
             render={({ field }) => (
               <FormItem className="ml-4">
-                <FormLabel>{game.name} <span className="text-xs text-muted-foreground">({game.extraType || 'opcional'})</span></FormLabel>
+                <FormLabel>{game.name} <span className="text-xs text-muted-foreground">({game.extraType === 'obligatoria' ? 'obligatoria' : 'opcional'})</span></FormLabel>
                 <Select
                   onValueChange={field.onChange}
                   value={field.value}
@@ -231,7 +231,7 @@ export default function TimesPage() {
                 >
                   <FormControl>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select status" />
+                      <SelectValue placeholder="Seleccionar estado" />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
@@ -253,12 +253,12 @@ export default function TimesPage() {
   return (
     <>
       <PageHeader
-        title="Record Times & Status"
-        description="Enter total physical, mental times, and status for extra challenges."
+        title="Registrar Tiempos y Estados"
+        description="Introduce tiempos totales físicos, mentales y estados para los desafíos extra."
       />
       <Card className="max-w-2xl mx-auto shadow-lg hover:shadow-xl transition-shadow duration-300">
         <CardHeader>
-          <CardTitle>New Score Entry</CardTitle>
+          <CardTitle>Nueva Entrada de Puntuación</CardTitle>
         </CardHeader>
         <CardContent>
           <Form {...form}>
@@ -268,7 +268,7 @@ export default function TimesPage() {
                 name="participantId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Participant</FormLabel>
+                    <FormLabel>Participante</FormLabel>
                     <Select 
                       onValueChange={field.onChange} 
                       value={field.value}
@@ -276,19 +276,19 @@ export default function TimesPage() {
                     >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select a participant" />
+                          <SelectValue placeholder="Seleccionar un participante" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {isLoadingParticipants && <SelectItem value="loading" disabled>Loading participants...</SelectItem>}
+                        {isLoadingParticipants && <SelectItem value="loading" disabled>Cargando participantes...</SelectItem>}
                         {!isLoadingParticipants && participants.length === 0 && (
                            <div className="p-4 text-sm text-muted-foreground text-center">
-                             No participants found. Add participants on the Participants page.
+                             No se encontraron participantes. Añade participantes en la página de Participantes.
                            </div>
                         )}
                         {participants.map((participant) => (
                           <SelectItem key={participant.id} value={participant.id}>
-                            {participant.name} (Year {participant.year})
+                            {participant.name} (Año {participant.year})
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -305,12 +305,12 @@ export default function TimesPage() {
                 name="tiempo_fisico"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Total Physical Challenge Time (minutes)</FormLabel>
+                    <FormLabel>Tiempo Total Desafío Físico (minutos)</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="e.g., 240.5" {...field} step="any" disabled={addScoreMutation.isPending} />
+                      <Input type="number" placeholder="ej., 240.5" {...field} step="any" disabled={addScoreMutation.isPending} />
                     </FormControl>
                     <FormDescription>
-                      Total time for all physical challenges. (e.g. 220 for 100pts, 360 for 30pts)
+                      Tiempo total para todos los desafíos físicos. (ej. 220 para 100pts, 360 para 30pts)
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -325,12 +325,12 @@ export default function TimesPage() {
                 name="tiempo_mental"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Total Mental Challenge Time (minutes)</FormLabel>
+                    <FormLabel>Tiempo Total Desafío Mental (minutos)</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="e.g., 60" {...field} step="any" disabled={addScoreMutation.isPending}/>
+                      <Input type="number" placeholder="ej., 60" {...field} step="any" disabled={addScoreMutation.isPending}/>
                     </FormControl>
                     <FormDescription>
-                      Total time for all mental challenges. (e.g. 50 for 100pts, 120 for 30pts)
+                      Tiempo total para todos los desafíos mentales. (ej. 50 para 100pts, 120 para 30pts)
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -350,7 +350,7 @@ export default function TimesPage() {
                   className="bg-primary hover:bg-primary/90 text-primary-foreground" 
                   disabled={addScoreMutation.isPending || participants.length === 0 || isLoadingParticipants || isLoadingGames}
                 >
-                  {addScoreMutation.isPending ? "Saving..." : "Save Data"}
+                  {addScoreMutation.isPending ? "Guardando..." : "Guardar Datos"}
                 </Button>
               </div>
             </form>

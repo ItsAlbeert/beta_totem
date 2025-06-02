@@ -120,7 +120,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               {/* Add breadcrumbs or page title here if needed */}
             </div>
             {/* Add user menu or other header actions here */}
-            <Button variant="outline" size="sm">User Profile</Button>
+            <Button variant="outline" size="sm">Perfil de Usuario</Button>
           </header>
           <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
             {children}

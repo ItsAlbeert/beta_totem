@@ -7,7 +7,7 @@ import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import type { LeaderboardEntry, Participant, Score, Game, ExtraGameStatusDetail, ExtraGameType } from "@/types";
+import type { LeaderboardEntry, Participant, Score, Game, GameCategory, ExtraGameStatusDetail, ExtraGameType } from "@/types";
 import { ArrowDownUp, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -64,7 +64,7 @@ export default function LeaderboardPage() {
       valA = (valA === undefined || valA === null ? (direction === 'asc' ? Infinity : -Infinity) : valA) as number;
       valB = (valB === undefined || valB === null ? (direction === 'asc' ? Infinity : -Infinity) : valB) as number;
       
-      if (column === 'rank') { // Rank is always asc
+      if (column === 'rank') { 
         return (valA as number) - (valB as number);
       }
       return direction === 'asc' ? (valA as number) - (valB as number) : (valB as number) - (valA as number);
@@ -79,9 +79,9 @@ export default function LeaderboardPage() {
 
 
   const handleSort = (column: SortableColumn) => {
-    let newDirection: SortDirection = 'asc'; // Default for most columns when switching
-    if (column.startsWith('puntos_')) {
-      newDirection = 'desc'; // Points columns default to desc
+    let newDirection: SortDirection = 'asc'; 
+    if (column.startsWith('puntos_') || column === 'year') {
+      newDirection = 'desc'; 
     }
 
     if (sortColumn === column) {
@@ -106,7 +106,12 @@ export default function LeaderboardPage() {
   
   const getExtraGameStatusText = (status: ExtraGameStatusDetail | undefined): string => {
     if (!status) return "N/A";
-    return status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+     switch (status) {
+      case 'muy_bien': return 'Muy Bien';
+      case 'regular': return 'Regular';
+      case 'no_hecho': return 'No Hecho';
+      default: return status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    }
   };
 
   const getExtraGamePointsText = (points: number | undefined): string => {
@@ -116,7 +121,7 @@ export default function LeaderboardPage() {
 
 
   if (overallError) {
-    return <p className="text-destructive text-center py-8">Error loading data: {(overallError as Error).message}</p>;
+    return <p className="text-destructive text-center py-8">Error al cargar datos: {(overallError as Error).message}</p>;
   }
 
   const definedExtraGames = games.filter(g => g.category === 'Extra');
@@ -124,14 +129,14 @@ export default function LeaderboardPage() {
   return (
     <>
       <PageHeader
-        title="Leaderboard"
-        description="Overall participant rankings based on Total Points (Pᴛ). Higher is better. Click rows for details."
+        title="Clasificación"
+        description="Clasificación general de participantes basada en Puntos Totales (Pᴛ). Más alto es mejor. Haz clic en las filas para ver detalles."
       />
       <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
         <CardHeader>
-          <CardTitle>Current Standings</CardTitle>
+          <CardTitle>Posiciones Actuales</CardTitle>
           <CardDescription>
-            Participants are ranked by their Puntos Total (Pᴛ). Click column headers to sort.
+            Los participantes se clasifican por sus Puntos Totales (Pᴛ). Haz clic en las cabeceras para ordenar.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -148,14 +153,14 @@ export default function LeaderboardPage() {
                 <TableRow>
                   <TableHead className="w-[60px]"></TableHead> 
                   <TableHead className="w-[80px]">
-                    <SortableButton column="rank">Rank</SortableButton>
+                    <SortableButton column="rank">Clasif.</SortableButton>
                   </TableHead>
-                  <TableHead className="w-[80px]">Photo</TableHead>
+                  <TableHead className="w-[80px]">Foto</TableHead>
                   <TableHead>
-                     <SortableButton column="name">Name</SortableButton>
+                     <SortableButton column="name">Nombre</SortableButton>
                   </TableHead>
                   <TableHead>
-                    <SortableButton column="year">Year</SortableButton>
+                    <SortableButton column="year">Año</SortableButton>
                   </TableHead>
                   <TableHead className="text-right">
                     <SortableButton column="puntos_fisico">P<sub>Físico</sub></SortableButton>
@@ -199,20 +204,20 @@ export default function LeaderboardPage() {
                       <TableRow className="bg-muted/10 hover:bg-muted/20 transition-colors">
                         <TableCell colSpan={9} className="p-0">
                           <div className="p-4 pl-[70px] border-l-4 border-primary/30 space-y-3"> 
-                            <h4 className="text-md font-semibold mb-2">Breakdown (Latest Score on {new Date(entry.scoreRecordedAt).toLocaleDateString()}):</h4>
+                            <h4 className="text-md font-semibold mb-2">Desglose (Última Puntuación del {new Date(entry.scoreRecordedAt).toLocaleDateString('es-ES')}):</h4>
                             
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1 text-sm">
-                                <p>Raw Physical Time: <span className="font-medium">{entry.latest_tiempo_fisico.toFixed(2)} min</span> → P<sub>Físico</sub>: <span className="font-medium">{entry.puntos_fisico.toFixed(1)} pts</span></p>
-                                <p>Raw Mental Time: <span className="font-medium">{entry.latest_tiempo_mental.toFixed(2)} min</span> → P<sub>Mental</sub>: <span className="font-medium">{entry.puntos_mental.toFixed(1)} pts</span></p>
+                                <p>Tiempo Físico Bruto: <span className="font-medium">{entry.latest_tiempo_fisico.toFixed(2)} min</span> → P<sub>Físico</sub>: <span className="font-medium">{entry.puntos_fisico.toFixed(1)} pts</span></p>
+                                <p>Tiempo Mental Bruto: <span className="font-medium">{entry.latest_tiempo_mental.toFixed(2)} min</span> → P<sub>Mental</sub>: <span className="font-medium">{entry.puntos_mental.toFixed(1)} pts</span></p>
                             </div>
                             
                             {definedExtraGames.length > 0 && (
                                 <div>
-                                    <h5 className="text-sm font-medium text-primary mb-1">Extra Games Statuses & Points:</h5>
+                                    <h5 className="text-sm font-medium text-primary mb-1">Estados y Puntos de Juegos Extra:</h5>
                                     <ul className="list-disc pl-5 space-y-0.5 text-sm text-foreground/80">
                                         {definedExtraGames.map(extraGame => (
                                             <li key={extraGame.id}>
-                                                {extraGame.name} <span className="text-xs">({extraGame.extraType || 'opcional'})</span>: 
+                                                {extraGame.name} <span className="text-xs">({extraGame.extraType === 'obligatoria' ? 'obligatoria' : 'opcional'})</span>: 
                                                 <Badge variant={entry.latest_extra_game_detailed_statuses?.[extraGame.id] === 'muy_bien' ? 'default' : entry.latest_extra_game_detailed_statuses?.[extraGame.id] === 'regular' ? 'secondary' : 'outline'} className="ml-1 text-xs">
                                                     {getExtraGameStatusText(entry.latest_extra_game_detailed_statuses?.[extraGame.id])}
                                                 </Badge>
@@ -221,18 +226,18 @@ export default function LeaderboardPage() {
                                                 </span>
                                             </li>
                                         ))}
-                                        <li className="font-semibold">Subtotal Extras (Cruda): {entry.puntos_extras_cruda.toFixed(1)} pts</li>
-                                        <li className="font-semibold">Final P<sub>Extras</sub> (Capped): {entry.puntos_extras.toFixed(1)} pts</li>
+                                        <li className="font-semibold">Subtotal Extras (Bruto): {entry.puntos_extras_cruda.toFixed(1)} pts</li>
+                                        <li className="font-semibold">P<sub>Extras</sub> Final (Limitado): {entry.puntos_extras.toFixed(1)} pts</li>
                                     </ul>
                                 </div>
                             )}
                             {definedExtraGames.length === 0 && (
-                                 <p className="text-sm text-muted-foreground mt-2">No Extra games defined in the system.</p>
+                                 <p className="text-sm text-muted-foreground mt-2">No hay juegos Extra definidos en el sistema.</p>
                             )}
 
                             {entry.gameTimes && Object.keys(entry.gameTimes).length > 0 && (
                                 <div className="mt-2">
-                                <h5 className="text-sm font-medium text-primary mb-1">Individual Game Times (logged):</h5>
+                                <h5 className="text-sm font-medium text-primary mb-1">Tiempos Individuales de Juegos (registrados):</h5>
                                 {(['Physical', 'Mental'] as GameCategory[]).map(category => {
                                   const categoryGamesTimes = Object.entries(entry.gameTimes || {})
                                     .map(([gameId, time]) => {
@@ -248,7 +253,7 @@ export default function LeaderboardPage() {
 
                                   return (
                                     <div key={category} className="mb-1">
-                                      <h6 className="text-xs font-semibold text-muted-foreground mb-0.5">{category} Games:</h6>
+                                      <h6 className="text-xs font-semibold text-muted-foreground mb-0.5">Juegos {category === 'Physical' ? 'Físicos' : 'Mentales'}:</h6>
                                       <ul className="list-disc pl-5 space-y-0.5 text-sm text-foreground/80">
                                         {categoryGamesTimes.map(game => (
                                           <li key={game.name}>{game.name}: {game.time.toFixed(2)} min</li>
@@ -260,7 +265,7 @@ export default function LeaderboardPage() {
                                 </div>
                             )}
                             {(!entry.gameTimes || Object.keys(entry.gameTimes).length === 0) && (
-                                <p className="text-sm text-muted-foreground mt-2">No specific Physical/Mental game times were logged for this score entry.</p>
+                                <p className="text-sm text-muted-foreground mt-2">No se registraron tiempos específicos de juegos Físicos/Mentales para esta entrada.</p>
                             )}
                           </div>
                         </TableCell>
@@ -272,7 +277,7 @@ export default function LeaderboardPage() {
             </Table>
           )}
           {leaderboardData.length === 0 && !isLoadingOverall && !overallError && (
-            <p className="text-center text-muted-foreground py-8">No leaderboard data available. Add participants and record their scores.</p>
+            <p className="text-center text-muted-foreground py-8">No hay datos de clasificación disponibles. Añade participantes y registra sus puntuaciones.</p>
           )}
         </CardContent>
       </Card>

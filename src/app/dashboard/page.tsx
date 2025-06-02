@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { Participant, Score, Game, LeaderboardEntry, ExtraGameStatusDetail } from "@/types";
 import { Icons } from "@/components/icons";
 import { formatDistanceToNowStrict } from 'date-fns';
+import { es } from 'date-fns/locale';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { getParticipants, getGames, getScores, getRecentScores } from "@/lib/firestore-services";
 import { calculateAllParticipantScores } from "@/lib/data-utils"; 
@@ -28,9 +29,8 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const now = new Date();
-    setCurrentTime(now.toLocaleTimeString());
-    // Update time every second, but ensure it starts immediately
-    const timerId = setInterval(() => setCurrentTime(new Date().toLocaleTimeString()), 1000);
+    setCurrentTime(now.toLocaleTimeString('es-ES'));
+    const timerId = setInterval(() => setCurrentTime(new Date().toLocaleTimeString('es-ES')), 1000);
     return () => clearInterval(timerId);
   }, []);
 
@@ -93,14 +93,14 @@ export default function DashboardPage() {
             if (totalExtraEntries > 0) {
                  extraSummary = `${muyBienCount} MB, ${regularCount} R, ${noHechoCount} NH`;
             } else {
-                extraSummary = "No extra games data";
+                extraSummary = "Sin datos de juegos extra";
             }
         }
 
         return {
             ...score,
-            participantName: participantsMap.get(score.participantId) || "Unknown",
-            scoreSummary: `T_F: ${score.tiempo_fisico.toFixed(1)}, T_M: ${score.tiempo_mental.toFixed(1)}, Extras: ${extraSummary}`
+            participantName: participantsMap.get(score.participantId) || "Desconocido",
+            scoreSummary: `P_F: ${score.puntos_fisico?.toFixed(1) ?? 'N/A'}, P_M: ${score.puntos_mental?.toFixed(1) ?? 'N/A'}, Extras: ${extraSummary}, P_Total: ${score.puntos_total?.toFixed(1) ?? 'N/A'}`
         };
     });
 
@@ -139,43 +139,43 @@ export default function DashboardPage() {
   );
 
   if (overallError) {
-    return <p className="text-destructive text-center py-8">Error loading dashboard data: {(overallError as Error).message}</p>;
+    return <p className="text-destructive text-center py-8">Error al cargar los datos del panel: {(overallError as Error).message}</p>;
   }
 
   return (
     <>
       <PageHeader
-        title="Competition Dashboard"
-        description={currentTime ? `Overview of ChronoScore activities. Current time: ${currentTime}` : "Loading time..."}
+        title="Panel de Control de la Competición"
+        description={currentTime ? `Resumen de actividades de ChronoScore. Hora actual: ${currentTime}` : "Cargando hora..."}
       />
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 mb-8">
         <StatCard 
-          title="Total Participants" 
+          title="Total de Participantes" 
           value={dashboardData?.totalParticipants ?? 0} 
           icon={Icons.Users} 
-          description="Currently registered competitors."
+          description="Competidores registrados actualmente."
           isLoading={isLoadingOverall}
         />
         <StatCard 
-          title="Total Games" 
+          title="Total de Juegos" 
           value={dashboardData?.totalGames ?? 0} 
           icon={Icons.Gamepad2}
-          description="Defined games for the competition."
+          description="Juegos definidos para la competición."
           isLoading={isLoadingOverall}
         />
         <StatCard 
-          title="Average Total Points (Pᴛ)" 
+          title="Media de Puntos Totales (Pᴛ)" 
           value={dashboardData?.averageTotalPoints !== null && dashboardData?.averageTotalPoints !== undefined ? `${dashboardData.averageTotalPoints.toFixed(1)} pts` : 'N/A'} 
           icon={Icons.Sigma}
-          description="Avg. of final total points (Pᴛ)."
+          description="Media de los puntos totales finales (Pᴛ)."
           isLoading={isLoadingOverall}
         />
         <StatCard 
-          title="Scores Logged" 
+          title="Puntuaciones Registradas" 
           value={dashboardData?.totalScoresLogged ?? 0} 
           icon={Icons.Activity}
-          description="Total raw scores recorded so far."
+          description="Total de puntuaciones brutas registradas."
           isLoading={isLoadingOverall}
         />
       </div>
@@ -184,9 +184,9 @@ export default function DashboardPage() {
         <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
           <CardHeader>
             <CardTitle className="flex items-center">
-              <Icons.Award className="mr-2 h-6 w-6 text-yellow-500" /> Top Performers
+              <Icons.Award className="mr-2 h-6 w-6 text-yellow-500" /> Mejores Participantes
             </CardTitle>
-            <CardDescription>Top 3 participants by Total Points (Pᴛ). Higher is better.</CardDescription>
+            <CardDescription>Top 3 participantes por Puntos Totales (Pᴛ). Más alto es mejor.</CardDescription>
           </CardHeader>
           <CardContent>
             {isLoadingOverall && !dashboardData ? (
@@ -206,13 +206,13 @@ export default function DashboardPage() {
                     </Avatar>
                     <div className="flex-1">
                       <p className="font-medium text-foreground">{performer.name}</p>
-                      <p className="text-sm text-muted-foreground">Total Points (Pᴛ): {performer.puntos_total.toFixed(1)} pts</p>
+                      <p className="text-sm text-muted-foreground">Puntos Totales (Pᴛ): {performer.puntos_total.toFixed(1)} pts</p>
                     </div>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="text-center text-muted-foreground py-4">No performance data yet. Add scores to see rankings.</p>
+              <p className="text-center text-muted-foreground py-4">Aún no hay datos de rendimiento. Añade puntuaciones para ver la clasificación.</p>
             )}
           </CardContent>
         </Card>
@@ -220,9 +220,9 @@ export default function DashboardPage() {
         <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
           <CardHeader>
             <CardTitle className="flex items-center">
-              <Icons.CalendarClock className="mr-2 h-6 w-6 text-blue-500" /> Recent Activity
+              <Icons.CalendarClock className="mr-2 h-6 w-6 text-blue-500" /> Actividad Reciente
             </CardTitle>
-            <CardDescription>Last 5 raw scores recorded.</CardDescription>
+            <CardDescription>Últimas 5 puntuaciones brutas registradas.</CardDescription>
           </CardHeader>
           <CardContent>
             {isLoadingOverall && !dashboardData ? (
@@ -243,14 +243,14 @@ export default function DashboardPage() {
                         </p>
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        {score.recordedAt ? formatDistanceToNowStrict(new Date(score.recordedAt), { addSuffix: true }) : 'Invalid date'}
+                        {score.recordedAt ? formatDistanceToNowStrict(new Date(score.recordedAt), { addSuffix: true, locale: es }) : 'Fecha inválida'}
                       </p>
                     </li>
                   ))}
                 </ul>
               </ScrollArea>
             ) : (
-              <p className="text-center text-muted-foreground py-4">No scores recorded yet.</p>
+              <p className="text-center text-muted-foreground py-4">Aún no se han registrado puntuaciones.</p>
             )}
           </CardContent>
         </Card>

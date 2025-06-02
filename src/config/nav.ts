@@ -20,59 +20,58 @@ export const primaryNav: NavItemGroup[] = [
   {
     items: [
       {
-        title: "Dashboard",
+        title: "Panel de Control",
         href: "/dashboard",
         icon: Icons.LayoutDashboard,
-        description: "Overview of the competition.",
+        description: "Resumen general de la competición.",
       },
       {
-        title: "Record Times",
+        title: "Registrar Tiempos y Estados",
         href: "/times",
         icon: Icons.Clock,
-        description: "Input physical, mental, and extra times for participants.",
+        description: "Introduce tiempos físicos, mentales y estados para los desafíos extra.",
       },
       {
-        title: "Participants",
+        title: "Participantes",
         href: "/participants",
         icon: Icons.Users,
-        description: "View participant information.",
+        description: "Ver información de los participantes.",
       },
       {
-        title: "Games",
+        title: "Juegos",
         href: "/games",
         icon: Icons.Gamepad2,
-        description: "Manage competition games and their categories.",
+        description: "Gestionar los juegos de la competición y sus categorías.",
       },
       {
-        title: "Calculations",
+        title: "Cálculos",
         href: "/calculations",
         icon: Icons.Calculator,
-        description: "Detailed breakdown of score calculations.",
+        description: "Desglose detallado del cálculo de puntuaciones.",
       },
     ],
   },
   {
-    title: "Statistics",
+    title: "Estadísticas",
     items: [
       {
-        title: "Leaderboard",
+        title: "Clasificación",
         href: "/statistics/leaderboard",
         icon: Icons.ListOrdered,
-        description: "View overall participant rankings.",
+        description: "Ver la clasificación general de los participantes.",
       },
       {
-        title: "Trends",
+        title: "Tendencias",
         href: "/statistics/trends",
         icon: Icons.LineChart,
-        description: "Analyze category and game performance trends.",
+        description: "Analizar tendencias de rendimiento por categoría y juego.",
       },
       {
-        title: "Comparisons",
+        title: "Comparativas",
         href: "/statistics/comparisons",
         icon: Icons.BarChart3,
-        description: "Compare participants and game performances.",
+        description: "Comparar el rendimiento de participantes y juegos.",
       },
     ],
   },
 ];
-

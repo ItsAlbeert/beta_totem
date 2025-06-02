@@ -78,7 +78,7 @@ export default function TrendsPage() {
     });
 
     Object.keys(result).forEach(cat => {
-        (result[cat as GameCategory] as SingleMetricDataPoint[]).sort((a, b) => (b.score ?? -Infinity) - (a.score ?? -Infinity));
+        (result[cat as GameCategory] as SingleMetricDataPoint[]).sort((a, b) => (b.score ?? -Infinity) - (a.score ?? -Infinity)); // Higher points are better
     });
     return result;
   }, [processedData]);
@@ -96,8 +96,7 @@ export default function TrendsPage() {
           result[game.id].push({ name: participantsMap.get(entry.id)?.name || entry.id, score: gameTime });
         }
       });
-      // Sort by time (lower is better for these games)
-      result[game.id].sort((a, b) => (a.score ?? Infinity) - (b.score ?? Infinity)); 
+      result[game.id].sort((a, b) => (a.score ?? Infinity) - (b.score ?? Infinity)); // Lower time is better
     });
     return result;
   }, [processedData]);
@@ -108,14 +107,14 @@ export default function TrendsPage() {
     description: string, 
     data: SingleMetricDataPoint[], 
     dataKey: string = "score", 
-    yAxisLabel: string = "Score (pts)", 
+    yAxisLabel: string = "Puntos (pts)", 
     chartKeySuffix: string, 
     mainChart: boolean = false,
     lowerIsBetter: boolean = false 
   ) => {
     const chartUniqueKey = `chart-${chartKeySuffix}-${mainChart ? 'main' : 'sub'}`;
     if (isLoadingOverall && !processedData && data.length === 0) return <Skeleton className={cn(mainChart ? "h-[400px]" : "h-[300px]", "w-full shadow-lg")} key={`${chartUniqueKey}-skeleton`} />;
-    if (!isLoadingOverall && data.length === 0) return <p className="text-center text-muted-foreground py-4 col-span-full" key={`${chartUniqueKey}-nodata`}>No data available for this chart.</p>;
+    if (!isLoadingOverall && data.length === 0) return <p className="text-center text-muted-foreground py-4 col-span-full" key={`${chartUniqueKey}-nodata`}>No hay datos disponibles para este gráfico.</p>;
     
     const config: ChartConfig = { [dataKey]: { label: yAxisLabel, color: getColor(mainChart ? Math.floor(Math.random() * 3) : Math.floor(Math.random() * 5) + 3) } };
 
@@ -134,7 +133,7 @@ export default function TrendsPage() {
                     type="number" 
                     stroke="hsl(var(--muted-foreground))" 
                     label={{ value: yAxisLabel, position: 'insideBottom', offset: -15 , fill: 'hsl(var(--muted-foreground))' }} 
-                    domain={lowerIsBetter ? ['dataMin', 'auto'] : [0, 'auto']}
+                    domain={lowerIsBetter ? ['dataMin', 'auto'] : (mainChart || dataKey === 'score' && !lowerIsBetter ? [0, 'auto'] : ['auto', 'auto'])} // Adjust domain for points vs time
                 />
                 <YAxis 
                   dataKey="name" 
@@ -161,33 +160,42 @@ export default function TrendsPage() {
     const categoryGames = processedData?.games.filter(g => g.category === category) || [];
     const categoryTotalData = categoryPointsChartData[category] || [];
     
-    const yAxisLabel = category === 'Physical' ? `Puntos Físico (Pғ)` 
-                     : category === 'Mental' ? `Puntos Mental (Pᴍ)` 
-                     : `Puntos Extras (Pᴇ)`;
+    let yAxisLabel = "Puntos";
+    let description = "";
 
-    const description = category === 'Physical' 
-      ? `Puntos de rendimiento físico (30-100). T≤220min = 100pts, T≥360min = 30pts.`
-      : category === 'Mental' 
-      ? `Puntos de rendimiento mental (30-100). T≤50min = 100pts, T≥120min = 30pts.`
-      : `Puntos por juegos extra (-10 a +30). Calculado de estados (Muy Bien, Regular, No Hecho).`;
+    switch(category) {
+        case 'Physical':
+            yAxisLabel = `Puntos Físico (Pғ)`;
+            description = `Puntos de rendimiento físico (30-100). T≤220min = 100pts, T≥360min = 30pts.`;
+            break;
+        case 'Mental':
+            yAxisLabel = `Puntos Mental (Pᴍ)`;
+            description = `Puntos de rendimiento mental (30-100). T≤50min = 100pts, T≥120min = 30pts.`;
+            break;
+        case 'Extra':
+            yAxisLabel = `Puntos Extras (Pᴇ)`;
+            description = `Puntos por juegos extra (-10 a +30). Calculado de estados (Muy Bien, Regular, No Hecho).`;
+            break;
+    }
+
 
     return (
       <div className="mb-12" key={`category-section-${category}`}>
-        <h2 className="text-3xl font-semibold mb-6 border-b pb-3 text-foreground">{titleSuffix} Performance (Points)</h2>
+        <h2 className="text-3xl font-semibold mb-6 border-b pb-3 text-foreground">{titleSuffix} Rendimiento (Puntos)</h2>
         {renderBarChart(
-          `Overall ${category} Points`, 
+          `Puntos Generales ${category === 'Physical' ? 'Físicos' : category === 'Mental' ? 'Mentales' : 'Extra'}`, 
           description,
           categoryTotalData,
           "score",
           yAxisLabel,
           `total-points-${category.toLowerCase()}`,
           true,
-          false // Higher points are better
+          false 
         )}
 
         { (category === 'Physical' || category === 'Mental') && categoryGames.length > 0 && (
           <>
-            <h3 className="text-2xl font-medium mt-10 mb-6 text-foreground/90">Individual {category} Games (Raw Times)</h3>
+            <h3 className="text-2xl font-medium mt-10 mb-6 text-foreground/90">Juegos {category === 'Physical' ? 'Físicos' : 'Mentales'} Individuales (Tiempos Brutos)</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {categoryGames.map(game => (
                 <div key={game.id}>
@@ -196,10 +204,10 @@ export default function TrendsPage() {
                   "", 
                   individualGameTimeChartData[game.id] || [],
                   "score",
-                  "Time (min)", 
+                  "Tiempo (min)", 
                   `game-${game.id}`,
                   false,
-                  true // Lower time is better for these raw times
+                  true 
                 )}
                 </div>
               ))}
@@ -207,12 +215,12 @@ export default function TrendsPage() {
           </>
         )}
          { (category === 'Physical' || category === 'Mental') && categoryGames.length === 0 && !isLoadingOverall && !overallError && ( 
-             <p className="text-center text-muted-foreground py-4 mt-6">No {category.toLowerCase()} games defined for this category.</p>
+             <p className="text-center text-muted-foreground py-4 mt-6">No hay juegos {category.toLowerCase() === 'physical' ? 'físicos' : 'mentales'} definidos para esta categoría.</p>
         )}
-        { category === 'Extra' && ( // Always show this for Extra, regardless of games defined
+        { category === 'Extra' && (
             <p className="text-center text-muted-foreground py-4 mt-6 text-sm">
-              Individual "Extra" game statuses and their point contributions are detailed in the <strong>Leaderboard</strong> and <strong>Calculations</strong> pages. 
-              The chart above shows the final P<sub>Extras</sub> score.
+              Los estados individuales de los juegos "Extra" y sus contribuciones de puntos se detallan en las páginas de <strong>Clasificación</strong> y <strong>Cálculos</strong>. 
+              El gráfico de arriba muestra la puntuación final P<sub>Extras</sub>.
             </p>
         )}
       </div>
@@ -220,14 +228,14 @@ export default function TrendsPage() {
   };
 
   if (overallError) {
-    return <p className="text-destructive text-center py-8">Error loading trends data: {(overallError as Error).message}</p>;
+    return <p className="text-destructive text-center py-8">Error al cargar los datos de tendencias: {(overallError as Error).message}</p>;
   }
 
   return (
     <>
       <PageHeader
-        title="Performance Trends"
-        description="Analyze overall category points and individual game raw times based on latest results."
+        title="Tendencias de Rendimiento"
+        description="Analiza puntos generales por categoría y tiempos brutos de juegos individuales basados en los últimos resultados."
       />
       <div className="space-y-10">
         {isLoadingOverall && !processedData ? (
@@ -238,9 +246,9 @@ export default function TrendsPage() {
           </>
         ) : (
           <>
-            {renderCategorySection('Physical', 'Physical Challenge')}
-            {renderCategorySection('Mental', 'Mental Challenge')}
-            {renderCategorySection('Extra', 'Extra Bonus')}
+            {renderCategorySection('Physical', 'Desafío Físico')}
+            {renderCategorySection('Mental', 'Desafío Mental')}
+            {renderCategorySection('Extra', 'Bonus Extra')}
           </>
         )}
       </div>

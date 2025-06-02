@@ -18,6 +18,7 @@ import type { ChartConfig, Participant, Score, Game, PerformanceOverTimeDataPoin
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format, parseISO } from 'date-fns';
+import { es } from 'date-fns/locale';
 import { getParticipants, getScores, getGames } from "@/lib/firestore-services";
 import { calculateAllParticipantScores } from "@/lib/data-utils"; 
 
@@ -80,62 +81,52 @@ export default function ComparisonsPage() {
     );
   };
 
-  // Participant Comparison Chart: Trend of P_Total (Total Points) over time
   const participantPTotalComparisonChart = useMemo(() => {
     if (!processedData || selectedParticipantIdsForComparison.length === 0 || !processedData.allScores.length) {
       return { chartData: [], chartConfig: {} };
     }
     const { participantsMap, allScores, games: allGames, participants: allParticipants } = processedData;
     
-    // This will store { participantName: [{ time: string, value: P_Total }] }
     const chartDataPoints: { [participantName: string]: { time: string, value: number }[] } = {};
 
-    // For each selected participant, calculate P_Total for each of their scores
     selectedParticipantIdsForComparison.forEach(pid => {
       const participantName = participantsMap.get(pid)?.name || pid;
       chartDataPoints[participantName] = [];
 
-      // Filter scores for this participant and sort them by date
       const participantScores = allScores
         .filter(s => s.participantId === pid)
         .sort((a,b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime());
 
       participantScores.forEach(score => {
-        // To calculate P_Total for a single score, we essentially run a mini-version
-        // of calculateAllParticipantScores for just this one participant and this one score,
-        // but since P_fisico and P_mental now use fixed thresholds, we don't need global min/max times.
-        // We only need allGames for the extra points calculation.
-        
-        // Create a temporary participant array with just this one participant
         const tempParticipantArray = allParticipants.filter(p => p.id === pid);
-        // Create a temporary score array with just this one score
         const tempScoreArray = [score];
-
-        // Calculate scores for this specific entry
         const singleEntryCalculation = calculateAllParticipantScores(tempParticipantArray, tempScoreArray, allGames);
         
         if (singleEntryCalculation.length > 0) {
           const p_total = singleEntryCalculation[0].puntos_total;
           chartDataPoints[participantName].push({ 
-            time: format(parseISO(score.recordedAt), "MMM d, HH:mm"), 
+            time: format(parseISO(score.recordedAt), "d MMM, HH:mm", { locale: es }), 
             value: parseFloat(p_total.toFixed(1)) 
           });
         }
       });
     });
     
-    // Aggregate all unique timestamps from all selected participants' scores
     const allTimestamps = Array.from(new Set(Object.values(chartDataPoints).flat().map(dp => dp.time)))
-      .sort((a,b) => new Date(a.split(',')[0]).getTime() - new Date(b.split(',')[0]).getTime()); // Basic sort by date part
+      .sort((a, b) => {
+        // Custom sort for "d MMM, HH:mm"
+        const dateA = parseISO(allScores.find(s => format(parseISO(s.recordedAt), "d MMM, HH:mm", { locale: es }) === a)?.recordedAt || new Date(0).toISOString());
+        const dateB = parseISO(allScores.find(s => format(parseISO(s.recordedAt), "d MMM, HH:mm", { locale: es }) === b)?.recordedAt || new Date(0).toISOString());
+        return dateA.getTime() - dateB.getTime();
+      });
 
 
-    // Construct the final chart data by merging data points for each timestamp
     const chartData: PerformanceOverTimeDataPoint[] = allTimestamps.map(ts => {
         const dataPoint: PerformanceOverTimeDataPoint = { time: ts };
         selectedParticipantIdsForComparison.forEach(pid => {
             const pName = participantsMap.get(pid)?.name || pid;
             const scoreAtTime = chartDataPoints[pName]?.find(dp => dp.time === ts);
-            dataPoint[pName] = scoreAtTime ? scoreAtTime.value : null; // Use null for missing data points for a participant at a specific time
+            dataPoint[pName] = scoreAtTime ? scoreAtTime.value : null; 
         });
         return dataPoint;
     });
@@ -150,7 +141,6 @@ export default function ComparisonsPage() {
   }, [processedData, selectedParticipantIdsForComparison]);
 
 
-  // Game Comparison Chart: Raw times for selected Physical/Mental games across all participants (latest score)
   const gameComparisonChart = useMemo(() => {
     if (!processedData || selectedGameIdsForComparison.length === 0 || !processedData.allScores.length) {
          return { chartData: [], chartConfig: {} };
@@ -160,35 +150,34 @@ export default function ComparisonsPage() {
     const selectedGames = selectedGameIdsForComparison
         .map(id => gamesMap.get(id))
         .filter(Boolean)
-        .filter(game => game!.category === 'Physical' || game!.category === 'Mental') as Game[]; // Only physical/mental games have times
+        .filter(game => game!.category === 'Physical' || game!.category === 'Mental') as Game[]; 
 
     if (selectedGames.length === 0) return { chartData: [], chartConfig: {} };
 
-    // Use the globally calculated latest scores (which includes gameTimes)
     const leaderboardForLatestScores = calculateAllParticipantScores(allParticipantsList, allScoresList, allGamesList);
 
     const chartData: MultiMetricDataPoint[] = leaderboardForLatestScores.map(entry => {
       const participantName = participantsMap.get(entry.id)?.name || entry.id;
       const dataPoint: MultiMetricDataPoint = { name: participantName }; 
       selectedGames.forEach(game => {
-        dataPoint[game.name] = entry.gameTimes?.[game.id] ?? null; // Use null if no time recorded
+        dataPoint[game.name] = entry.gameTimes?.[game.id] ?? null; 
       });
       return dataPoint;
     }).filter(dp => selectedGames.some(game => dp[game.name] !== null && dp[game.name] !== undefined)); 
     
     const chartConfig: ChartConfig = {};
     selectedGames.forEach((game, index) => {
-      chartConfig[game.name] = { label: `${game.name} (Time)`, color: getColor(index + selectedParticipantIdsForComparison.length) }; // Offset colors
+      chartConfig[game.name] = { label: `${game.name} (Tiempo)`, color: getColor(index + selectedParticipantIdsForComparison.length) }; 
     });
 
     return { chartData, chartConfig };
   }, [processedData, selectedGameIdsForComparison, selectedParticipantIdsForComparison.length]);
 
 
-  const renderLineChart = (title: string, description: string, data: PerformanceOverTimeDataPoint[], config: ChartConfig, yAxisLabel: string = "Points (Pᴛ)") => {
+  const renderLineChart = (title: string, description: string, data: PerformanceOverTimeDataPoint[], config: ChartConfig, yAxisLabel: string = "Puntos (Pᴛ)") => {
     if (isLoadingOverall && !processedData && data.length === 0 && selectedParticipantIdsForComparison.length === 0) return <Skeleton className="h-[400px] w-full shadow-lg" />;
-    if (!isLoadingOverall && selectedParticipantIdsForComparison.length > 0 && data.length === 0) return <p className="text-center text-muted-foreground py-8">No recorded scores for selected participant(s) or no data to plot.</p>;
-    if (selectedParticipantIdsForComparison.length === 0) return <p className="text-center text-muted-foreground py-8">Select participants to compare their Total Points (Pᴛ) trend.</p>;
+    if (!isLoadingOverall && selectedParticipantIdsForComparison.length > 0 && data.length === 0) return <p className="text-center text-muted-foreground py-8">No hay puntuaciones registradas para el/los participante(s) seleccionado(s) o no hay datos para graficar.</p>;
+    if (selectedParticipantIdsForComparison.length === 0) return <p className="text-center text-muted-foreground py-8">Selecciona participantes para comparar su tendencia de Puntos Totales (Pᴛ).</p>;
     
     return (
       <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
@@ -216,10 +205,10 @@ export default function ComparisonsPage() {
     );
   };
 
-  const renderGroupedBarChart = (title: string, description: string, data: MultiMetricDataPoint[], config: ChartConfig, yAxisLabel: string = "Time (min)") => {
+  const renderGroupedBarChart = (title: string, description: string, data: MultiMetricDataPoint[], config: ChartConfig, yAxisLabel: string = "Tiempo (min)") => {
     if (isLoadingOverall && !processedData && data.length === 0 && selectedGameIdsForComparison.length === 0) return <Skeleton className="h-[400px] w-full shadow-lg" />;
-    if (!isLoadingOverall && selectedGameIdsForComparison.length > 0 && data.length === 0 ) return <p className="text-center text-muted-foreground py-8">No data for selected games or participants with scores in those games.</p>;
-    if (selectedGameIdsForComparison.length === 0) return <p className="text-center text-muted-foreground py-8">Select Physical/Mental games to compare raw performance times.</p>;
+    if (!isLoadingOverall && selectedGameIdsForComparison.length > 0 && data.length === 0 ) return <p className="text-center text-muted-foreground py-8">No hay datos para los juegos seleccionados o participantes con puntuaciones en esos juegos.</p>;
+    if (selectedGameIdsForComparison.length === 0) return <p className="text-center text-muted-foreground py-8">Selecciona juegos Físicos/Mentales para comparar tiempos brutos de rendimiento.</p>;
 
     return (
       <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
@@ -248,14 +237,14 @@ export default function ComparisonsPage() {
   };
   
   if (overallError) {
-    return <p className="text-destructive text-center py-8">Error loading comparison data: {(overallError as Error).message}</p>;
+    return <p className="text-destructive text-center py-8">Error al cargar los datos de comparativas: {(overallError as Error).message}</p>;
   }
 
   return (
     <>
       <PageHeader
-        title="Comparisons"
-        description="Select participants or games below for specific comparisons."
+        title="Comparativas"
+        description="Selecciona participantes o juegos abajo para comparaciones específicas."
       />
       
       {isLoadingOverall && !processedData ? (
@@ -266,10 +255,10 @@ export default function ComparisonsPage() {
       ) : (
       <div className="space-y-10">
         <div>
-          <h3 className="text-2xl font-semibold mb-3 text-foreground">Participant Total Points (Pᴛ) Trend</h3>
-          <p className="text-sm text-muted-foreground mb-4">Compare Total Points (Pᴛ) trends for selected participants across all their score recordings. Higher Pᴛ is better.</p>
+          <h3 className="text-2xl font-semibold mb-3 text-foreground">Tendencia de Puntos Totales (Pᴛ) por Participante</h3>
+          <p className="text-sm text-muted-foreground mb-4">Compara las tendencias de Puntos Totales (Pᴛ) para los participantes seleccionados a través de todos sus registros de puntuación. Más Pᴛ es mejor.</p>
           <div className="mb-6 p-4 border rounded-md bg-card shadow-sm">
-            <h4 className="text-md font-semibold mb-3 text-card-foreground/90">Select Participants:</h4>
+            <h4 className="text-md font-semibold mb-3 text-card-foreground/90">Seleccionar Participantes:</h4>
             {processedData && processedData.participants.length > 0 ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                 {processedData.participants.map((p) => (
@@ -279,39 +268,39 @@ export default function ComparisonsPage() {
                   </div>
                 ))}
               </div>
-            ) : <p className="text-sm text-muted-foreground">No participants available.</p>}
+            ) : <p className="text-sm text-muted-foreground">No hay participantes disponibles.</p>}
           </div>
           {renderLineChart(
-            "Participant Total Points (Pᴛ) Trend", 
+            "Tendencia de Puntos Totales (Pᴛ) por Participante", 
             "",
             participantPTotalComparisonChart.chartData,
             participantPTotalComparisonChart.chartConfig,
-            "Total Points (Pᴛ)"
+            "Puntos Totales (Pᴛ)"
           )}
         </div>
 
         <div>
-          <h3 className="text-2xl font-semibold mb-3 text-foreground">Game Performance Comparison (Raw Times)</h3>
-          <p className="text-sm text-muted-foreground mb-4">Compare participant raw performance times across selected Physical/Mental games (based on latest scores). Lower time is better.</p>
+          <h3 className="text-2xl font-semibold mb-3 text-foreground">Comparativa de Rendimiento en Juegos (Tiempos Brutos)</h3>
+          <p className="text-sm text-muted-foreground mb-4">Compara los tiempos brutos de rendimiento de los participantes en los juegos Físicos/Mentales seleccionados (basado en las últimas puntuaciones). Menor tiempo es mejor.</p>
           <div className="mb-6 p-4 border rounded-md bg-card shadow-sm">
-            <h4 className="text-md font-semibold mb-3 text-card-foreground/90">Select Physical/Mental Games:</h4>
+            <h4 className="text-md font-semibold mb-3 text-card-foreground/90">Seleccionar Juegos Físicos/Mentales:</h4>
             {processedData && processedData.games.filter(g => g.category === 'Physical' || g.category === 'Mental').length > 0 ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                 {processedData.games.filter(g => g.category === 'Physical' || g.category === 'Mental').map((g) => (
                   <div key={g.id} className="flex items-center space-x-2">
                     <Checkbox id={`compare-game-${g.id}`} checked={selectedGameIdsForComparison.includes(g.id)} onCheckedChange={(checked) => handleGameSelection(g.id, !!checked)} />
-                    <Label htmlFor={`compare-game-${g.id}`} className="text-sm font-normal cursor-pointer hover:text-primary transition-colors">{g.name} <span className="text-xs text-muted-foreground">({g.category})</span></Label>
+                    <Label htmlFor={`compare-game-${g.id}`} className="text-sm font-normal cursor-pointer hover:text-primary transition-colors">{g.name} <span className="text-xs text-muted-foreground">({g.category === 'Physical' ? 'Físico' : 'Mental'})</span></Label>
                   </div>
                 ))}
               </div>
-            ) : <p className="text-sm text-muted-foreground">No Physical or Mental games available for comparison.</p>}
+            ) : <p className="text-sm text-muted-foreground">No hay juegos Físicos o Mentales disponibles para comparación.</p>}
           </div>
           {renderGroupedBarChart(
-            "Game Performance Comparison (Raw Times)", 
+            "Comparativa de Rendimiento en Juegos (Tiempos Brutos)", 
             "", 
             gameComparisonChart.chartData,
             gameComparisonChart.chartConfig,
-            "Time (min)"
+            "Tiempo (min)"
           )}
         </div>
       </div>
