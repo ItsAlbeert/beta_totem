@@ -14,13 +14,14 @@ import {
   writeBatch,
   DocumentData,
   QueryDocumentSnapshot,
+  updateDoc,
 } from "firebase/firestore";
 import { db } from "./firebase";
-import type { Participant, Game, Score, ExtraChallengeStatus } from "@/types";
+import type { Participant, Game, Score, ExtraChallengeStatus, GameCategory, ExtraGameStatusDetail, ExtraGameType } from "@/types";
 
 // --- Helper to convert Firestore doc to actual data with ID ---
-function mapDocToDataWithId<T>(doc: QueryDocumentSnapshot<DocumentData>): T {
-  return { id: doc.id, ...doc.data() } as T;
+function mapDocToDataWithId<T>(docSnap: QueryDocumentSnapshot<DocumentData>): T { // Renamed doc to docSnap for clarity
+  return { id: docSnap.id, ...docSnap.data() } as T;
 }
 
 // --- Participants ---
@@ -29,7 +30,7 @@ const PARTICIPANTS_COLLECTION = "participants";
 export async function getParticipants(): Promise<Participant[]> {
   const q = query(collection(db, PARTICIPANTS_COLLECTION), orderBy("name"));
   const snapshot = await getDocs(q);
-  return snapshot.docs.map(doc => mapDocToDataWithId<Participant>(doc));
+  return snapshot.docs.map(docSnap => mapDocToDataWithId<Participant>(docSnap));
 }
 
 export async function addParticipant(participantData: Omit<Participant, "id">): Promise<Participant> {
@@ -38,15 +39,15 @@ export async function addParticipant(participantData: Omit<Participant, "id">): 
 }
 
 export async function deleteParticipant(participantId: string): Promise<void> {
-  const scoresQuery = query(collection(db, SCORES_COLLECTION), where("participantId", "==", participantId));
+  const scoresQuery = query(collection(db, "scores"), where("participantId", "==", participantId)); // Used "scores" directly for safety
   const scoresSnapshot = await getDocs(scoresQuery);
-  
+
   const batch = writeBatch(db);
-  scoresSnapshot.forEach(doc => {
-    batch.delete(doc.ref);
+  scoresSnapshot.forEach(docSnapshot => {
+    batch.delete(docSnapshot.ref);
   });
-  batch.delete(doc(db, PARTICIPIPANTS_COLLECTION, participantId));
-  
+  batch.delete(doc(db, PARTICIPANTS_COLLECTION, participantId)); // Corrected collection name
+
   await batch.commit();
 }
 
@@ -54,27 +55,52 @@ export async function deleteParticipant(participantId: string): Promise<void> {
 const GAMES_COLLECTION = "games";
 
 export async function getGames(): Promise<Game[]> {
-  const q = query(collection(db, GAMES_COLLECTION), orderBy("name")); // Simple sort by name
+  const q = query(collection(db, GAMES_COLLECTION), orderBy("name"));
   const snapshot = await getDocs(q);
-  const gamesList = snapshot.docs.map(doc => mapDocToDataWithId<Game>(doc));
+  const gamesList = snapshot.docs.map(docSnap => {
+    const gameData = mapDocToDataWithId<Game>(docSnap);
+    // Ensure extraType has a default if not present for older data
+    if (gameData.category === 'Extra' && !gameData.extraType) {
+      gameData.extraType = 'opcional'; // Default to 'opcional' or handle as needed
+    }
+    return gameData;
+  });
 
-  // Client-side sort for category priority then name
   return gamesList.sort((a, b) => {
-    const categoryOrder: Record<Game['category'], number> = { 'Physical': 1, 'Mental': 2, 'Extra': 3 };
-    if (categoryOrder[a.category] < categoryOrder[b.category]) return -1;
-    if (categoryOrder[a.category] > categoryOrder[b.category]) return 1;
-    if (a.name < b.name) return -1;
-    if (a.name > b.name) return 1;
-    return 0;
+    const categoryOrder: Record<GameCategory, number> = { 'Physical': 1, 'Mental': 2, 'Extra': 3 };
+    if (categoryOrder[a.category] !== categoryOrder[b.category]) {
+      return categoryOrder[a.category] - categoryOrder[b.category];
+    }
+    if (a.category === 'Extra' && b.category === 'Extra') {
+      const extraTypeOrder: Record<ExtraGameType, number> = { 'obligatoria': 1, 'opcional': 2 };
+      if (extraTypeOrder[a.extraType!] !== extraTypeOrder[b.extraType!]) {
+        return extraTypeOrder[a.extraType!] - extraTypeOrder[b.extraType!];
+      }
+    }
+    return a.name.localeCompare(b.name);
   });
 }
 
 export async function addGame(gameData: Omit<Game, "id">): Promise<Game> {
+  // Ensure extraType is set if category is Extra, default to 'opcional'
+  if (gameData.category === 'Extra' && !gameData.extraType) {
+    gameData.extraType = 'opcional';
+  }
   const docRef = await addDoc(collection(db, GAMES_COLLECTION), gameData);
-  return { id: docRef.id, ...gameData };
+  return { id: docRef.id, ...gameData } as Game;
 }
 
+
+export async function updateGame(gameId: string, gameData: Partial<Omit<Game, "id">>): Promise<void> {
+  const gameRef = doc(db, GAMES_COLLECTION, gameId);
+  await updateDoc(gameRef, gameData);
+}
+
+
 export async function deleteGame(gameId: string): Promise<void> {
+  // Consider implications: what if scores reference this game?
+  // For now, just deleting the game document.
+  // Future: Could archive or handle references in scores.
   await deleteDoc(doc(db, GAMES_COLLECTION, gameId));
 }
 
@@ -91,56 +117,49 @@ export async function getScores(): Promise<Score[]> {
       participantId: data.participantId,
       tiempo_fisico: data.tiempo_fisico ?? 0,
       tiempo_mental: data.tiempo_mental ?? 0,
-      extraGameStatuses: data.extraGameStatuses, // May be undefined for old scores
+      extraGameDetailedStatuses: data.extraGameDetailedStatuses,
       gameTimes: data.gameTimes,
       recordedAt: (data.recordedAt as Timestamp).toDate().toISOString(),
+      // Calculated fields (puntos_*) will be added by data-utils, not stored directly
     } as Score;
   });
 }
 
-type NewScoreFirestoreData = {
-  participantId: string;
-  tiempo_fisico: number;
-  tiempo_mental: number;
-  extraGameStatuses?: { [gameId: string]: ExtraChallengeStatus };
-  gameTimes?: { [gameId: string]: number };
-  recordedAt: Timestamp;
-};
-
-// Type for data coming from the form/app logic
 type AppScoreData = {
   participantId: string;
   tiempo_fisico: number;
   tiempo_mental: number;
-  extraGameStatuses?: { [gameId: string]: ExtraChallengeStatus };
+  extraGameDetailedStatuses?: { [gameId: string]: ExtraGameStatusDetail };
   gameTimes?: { [gameId: string]: number };
-  recordedAt: Date; // From the app, it's a Date object
+  recordedAt: Date;
 };
 
+type FirestoreScoreData = Omit<AppScoreData, 'recordedAt'> & { recordedAt: Timestamp };
 
 export async function addScore(
   scoreData: AppScoreData
-): Promise<Score> { 
-  
-  const dataToSave: NewScoreFirestoreData = {
+): Promise<Score> {
+
+  const dataToSave: FirestoreScoreData = {
     participantId: scoreData.participantId,
     tiempo_fisico: scoreData.tiempo_fisico,
     tiempo_mental: scoreData.tiempo_mental,
-    extraGameStatuses: scoreData.extraGameStatuses,
+    extraGameDetailedStatuses: scoreData.extraGameDetailedStatuses,
     gameTimes: scoreData.gameTimes,
     recordedAt: Timestamp.fromDate(scoreData.recordedAt),
   };
 
   const docRef = await addDoc(collection(db, SCORES_COLLECTION), dataToSave);
-  
-  return { 
-    id: docRef.id, 
+
+  return {
+    id: docRef.id,
     participantId: scoreData.participantId,
     tiempo_fisico: scoreData.tiempo_fisico,
     tiempo_mental: scoreData.tiempo_mental,
-    extraGameStatuses: scoreData.extraGameStatuses,
+    extraGameDetailedStatuses: scoreData.extraGameDetailedStatuses,
     gameTimes: scoreData.gameTimes,
     recordedAt: scoreData.recordedAt.toISOString()
+    // Puntos fields are not returned here, they are calculated on demand
   };
 }
 
@@ -155,7 +174,7 @@ export async function getRecentScores(count: number): Promise<Score[]> {
           participantId: data.participantId,
           tiempo_fisico: data.tiempo_fisico ?? 0,
           tiempo_mental: data.tiempo_mental ?? 0,
-          extraGameStatuses: data.extraGameStatuses,
+          extraGameDetailedStatuses: data.extraGameDetailedStatuses,
           gameTimes: data.gameTimes,
           recordedAt: (data.recordedAt as Timestamp).toDate().toISOString(),
         } as Score;
