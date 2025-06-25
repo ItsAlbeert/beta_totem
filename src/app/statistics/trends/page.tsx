@@ -12,7 +12,7 @@ import {
 import type { ChartConfig, Participant, Score, Game, GameCategory, SingleMetricDataPoint, LeaderboardEntry, ScoringSettings } from "@/types";
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer,
-  AreaChart, Area, RadarChart, PolarGrid, PolarAngleAxis, Radar
+  AreaChart, Area, RadarChart, PolarGrid, PolarAngleAxis, Radar, PolarRadiusAxis
 } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getParticipants, getScores, getGames, getScoringSettings } from "@/lib/firestore-services";
