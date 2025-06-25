@@ -83,7 +83,7 @@ export default function ComparisonsPage() {
 
   const handleGameSelection = (gameId: string, checked: boolean) => {
     setSelectedGameIdsForComparison(prev =>
-      checked ? [...prev, gameId] : prev.filter(id => id !== participantId) // Corrected: id !== gameId
+      checked ? [...prev, gameId] : prev.filter(id => id !== gameId)
     );
   };
 
