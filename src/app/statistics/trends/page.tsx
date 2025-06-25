@@ -8,21 +8,58 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import {
   ChartContainer,
   ChartTooltip,
-  ChartTooltipContent,
 } from "@/components/ui/chart";
-import type { ChartConfig, Participant, Score, Game, GameCategory, SingleMetricDataPoint, LeaderboardEntry, ExtraGameType, ScoringSettings } from "@/types";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts";
+import type { ChartConfig, Participant, Score, Game, GameCategory, SingleMetricDataPoint, LeaderboardEntry, ScoringSettings } from "@/types";
+import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer,
+  AreaChart, Area, RadarChart, PolarGrid, PolarAngleAxis, Radar
+} from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
 import { getParticipants, getScores, getGames, getScoringSettings } from "@/lib/firestore-services";
-import { calculateAllParticipantScores } from "@/lib/data-utils"; 
+import { calculateAllParticipantScores } from "@/lib/data-utils";
+import { TrendingUp, Trophy, Timer, Target, Activity, Users, Zap } from "lucide-react";
 
-const chartColors = [
-  "hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))",
-  "hsl(var(--primary))", "hsl(var(--accent))", "hsl(var(--secondary-foreground))", "hsl(var(--muted-foreground))",
+// --- New Modern Components & Data Processing ---
+
+const modernChartColors = [
+  "#8B5CF6", "#06B6D4", "#10B981", "#F59E0B", "#EF4444",
+  "#6366F1", "#EC4899", "#14B8A6", "#F97316"
 ];
 
-const getColor = (index: number) => chartColors[index % chartColors.length];
+const getColor = (index: number) => modernChartColors[index % modernChartColors.length];
+
+const ModernTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-background/95 backdrop-blur-sm border border-border rounded-lg p-3 shadow-2xl">
+        <p className="text-muted-foreground text-sm mb-1">{label}</p>
+        {payload.map((entry: any, index: number) => (
+          <p key={index} className="text-foreground font-medium" style={{ color: entry.color }}>
+            {entry.name}: {typeof entry.value === 'number' ? entry.value.toFixed(1) : entry.value}
+            {entry.name.includes('Tiempo') ? ' min' : ' pts'}
+          </p>
+        ))}
+      </div>
+    );
+  }
+  return null;
+};
+
+const StatCard = ({ icon: Icon, title, value, colorClass }: {
+  icon: React.ElementType, title: string, value: string, colorClass: string
+}) => (
+  <Card className="relative overflow-hidden hover:shadow-lg transition-all duration-300 hover:scale-105">
+    <CardContent className="p-6">
+      <div className="flex items-center justify-between mb-4">
+        <div className={`p-3 rounded-xl ${colorClass}`}>
+          <Icon className="w-6 h-6 text-white" />
+        </div>
+      </div>
+      <h3 className="text-muted-foreground text-sm font-medium mb-1">{title}</h3>
+      <p className="text-foreground text-2xl font-bold">{value}</p>
+    </CardContent>
+  </Card>
+);
 
 interface ProcessedPageData {
   participants: Participant[];
@@ -69,20 +106,56 @@ export default function TrendsPage() {
     return { participants, allScores, games, leaderboardForLatestScores, participantsMap, gamesMap, scoringSettings };
   }, [participants, allScores, games, scoringSettings, isLoadingOverall, overallError]);
 
+  const radarData = useMemo(() => {
+    if (!processedData) return [];
+    return processedData.leaderboardForLatestScores.slice(0, 5).map(entry => ({
+      subject: processedData.participantsMap.get(entry.id)?.name.split(' ')[0] || entry.id,
+      'P. Físico': entry.puntos_fisico || 0,
+      'P. Mental': entry.puntos_mental || 0,
+      'P. Extras': entry.puntos_extras || 0,
+      fullMark: 100,
+    }));
+  }, [processedData]);
 
+  const progressAreaData = useMemo(() => {
+    if (!processedData) return [];
+    return processedData.leaderboardForLatestScores.map((entry, index) => ({
+      name: processedData.participantsMap.get(entry.id)?.name.split(' ')[0] || entry.id,
+      posicion: index + 1,
+      'Puntos Físico': entry.puntos_fisico || 0,
+      'Puntos Mental': entry.puntos_mental || 0,
+      'Puntos Extra': entry.puntos_extras || 0,
+    }));
+  }, [processedData]);
+
+  const statsData = useMemo(() => {
+    if (!processedData) return null;
+    const { leaderboardForLatestScores } = processedData;
+    const totalParticipants = leaderboardForLatestScores.length;
+    if (totalParticipants === 0) return { totalParticipants: 0, avgPhysical: '0', avgMental: '0', maxTotal: '0' };
+    
+    const avgPhysical = leaderboardForLatestScores.reduce((sum, entry) => sum + (entry.puntos_fisico || 0), 0) / totalParticipants;
+    const avgMental = leaderboardForLatestScores.reduce((sum, entry) => sum + (entry.puntos_mental || 0), 0) / totalParticipants;
+    const maxTotal = Math.max(...leaderboardForLatestScores.map(entry => entry.puntos_total || 0));
+    
+    return {
+      totalParticipants,
+      avgPhysical: avgPhysical.toFixed(1),
+      avgMental: avgMental.toFixed(1),
+      maxTotal: maxTotal.toFixed(1)
+    };
+  }, [processedData]);
+  
   const categoryPointsChartData = useMemo(() => {
     if (!processedData) return { Physical: [], Mental: [], Extra: [] };
     const { leaderboardForLatestScores, participantsMap } = processedData;
-    
     const result: { [key in GameCategory | string]: SingleMetricDataPoint[] } = { Physical: [], Mental: [], Extra: [] };
-
     leaderboardForLatestScores.forEach(entry => {
       const participantName = participantsMap.get(entry.id)?.name || entry.id;
       result.Physical.push({ name: participantName, score: entry.puntos_fisico });
       result.Mental.push({ name: participantName, score: entry.puntos_mental });
       result.Extra.push({ name: participantName, score: entry.puntos_extras });
     });
-
     Object.keys(result).forEach(cat => {
         (result[cat as GameCategory] as SingleMetricDataPoint[]).sort((a, b) => (b.score ?? -Infinity) - (a.score ?? -Infinity)); 
     });
@@ -93,7 +166,6 @@ export default function TrendsPage() {
     if (!processedData) return {};
     const { games: allGamesList, leaderboardForLatestScores, participantsMap } = processedData;
     const result: { [gameId: string]: SingleMetricDataPoint[] } = {};
-
     allGamesList.filter(game => game.category === 'Physical' || game.category === 'Mental').forEach(game => {
       result[game.id] = [];
       leaderboardForLatestScores.forEach(entry => {
@@ -107,51 +179,40 @@ export default function TrendsPage() {
     return result;
   }, [processedData]);
 
-
-  const renderBarChart = (
+  const renderModernBarChart = (
     title: string, 
-    description: string, 
     data: SingleMetricDataPoint[], 
     dataKey: string = "score", 
-    yAxisLabel: string = "Puntos (pts)", 
-    chartKeySuffix: string, 
-    mainChart: boolean = false,
-    lowerIsBetter: boolean = false 
+    yAxisLabel: string = "Puntos", 
+    color: string,
+    lowerIsBetter: boolean = false
   ) => {
-    const chartUniqueKey = `chart-${chartKeySuffix}-${mainChart ? 'main' : 'sub'}`;
-    if (isLoadingOverall && (!processedData || !processedData.scoringSettings) && data.length === 0) return <Skeleton className={cn(mainChart ? "h-[400px]" : "h-[300px]", "w-full shadow-lg")} key={`${chartUniqueKey}-skeleton`} />;
-    if (!isLoadingOverall && data.length === 0) return <p className="text-center text-muted-foreground py-4 col-span-full" key={`${chartUniqueKey}-nodata`}>No hay datos disponibles para este gráfico.</p>;
+    if (isLoadingOverall && data.length === 0) return <Skeleton className="h-[300px] w-full" />;
+    if (!isLoadingOverall && data.length === 0) return <div className="flex items-center justify-center h-[300px] text-muted-foreground">No hay datos</div>;
     
-    const config: ChartConfig = { [dataKey]: { label: yAxisLabel, color: getColor(mainChart ? Math.floor(Math.random() * 3) : Math.floor(Math.random() * 5) + 3) } };
+    const config: ChartConfig = { [dataKey]: { label: yAxisLabel, color } };
+    const gradientId = `gradient-${dataKey}-${Math.random().toString(36).substr(2, 9)}`;
 
     return (
-      <Card className={cn("shadow-lg hover:shadow-xl transition-shadow duration-300", !mainChart && "sm:col-span-1")} key={chartUniqueKey}>
+      <Card className="shadow-lg hover:shadow-xl transition-all duration-300 h-full">
         <CardHeader>
-          <CardTitle className={mainChart ? "text-xl" : "text-lg"}>{title}</CardTitle>
-          {mainChart && description && <CardDescription>{description}</CardDescription>}
+          <CardTitle className="text-lg">{title}</CardTitle>
         </CardHeader>
         <CardContent>
-          <ChartContainer config={config} className={cn(mainChart ? "h-[350px]" : "h-[250px]", "w-full")}>
+          <ChartContainer config={config} className="h-[250px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data} layout="vertical" margin={{ left: 20, right: 30, top:5, bottom: 35 }}>
+              <BarChart data={data} layout="vertical" margin={{ left: 10, right: 30, top: 5, bottom: 20 }}>
+                <defs>
+                  <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={color} stopOpacity={0.9}/>
+                    <stop offset="95%" stopColor={color} stopOpacity={0.6}/>
+                  </linearGradient>
+                </defs>
                 <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis 
-                    type="number" 
-                    stroke="hsl(var(--muted-foreground))" 
-                    label={{ value: yAxisLabel, position: 'insideBottom', offset: -15 , fill: 'hsl(var(--muted-foreground))' }} 
-                    domain={lowerIsBetter ? ['dataMin', 'auto'] : (mainChart || (dataKey === 'score' && !lowerIsBetter) ? [0, 'auto'] : ['auto', 'auto'])} 
-                />
-                <YAxis 
-                  dataKey="name" 
-                  type="category" 
-                  tickLine={false} 
-                  axisLine={false} 
-                  stroke="hsl(var(--muted-foreground))" 
-                  tickFormatter={(value) => value.length > 15 ? `${value.substring(0,12)}...` : value}
-                  width={100}
-                />
-                <ChartTooltip cursor={{fill: 'hsl(var(--accent)/0.5)'}} content={<ChartTooltipContent indicator="dashed" />} />
-                <Bar dataKey={dataKey} fill={config[dataKey]?.color} radius={4} barSize={mainChart ? 20 : 15} />
+                <XAxis type="number" stroke="hsl(var(--muted-foreground))" domain={lowerIsBetter ? ['dataMin', 'auto'] : [0, 'auto']} />
+                <YAxis dataKey="name" type="category" stroke="hsl(var(--muted-foreground))" width={80} tickFormatter={(value) => value.length > 10 ? `${value.substring(0,8)}...` : value} />
+                <ChartTooltip cursor={{ fill: 'hsl(var(--accent)/0.5)' }} content={<ModernTooltip />} />
+                <Bar dataKey={dataKey} fill={`url(#${gradientId})`} radius={[0, 6, 6, 0]} barSize={15} />
               </BarChart>
             </ResponsiveContainer>
           </ChartContainer>
@@ -160,74 +221,58 @@ export default function TrendsPage() {
     );
   };
   
-  const renderCategorySection = (category: GameCategory, titleSuffix: string) => {
-    if (isLoadingOverall && !processedData) return <Skeleton className="h-[600px] w-full mb-8 shadow-lg" key={`skeleton-cat-${category}`} />;
-    
+  const renderCategorySection = (category: GameCategory, title: string, icon: React.ElementType, mainColor: string) => {
     const categoryGames = processedData?.games.filter(g => g.category === category) || [];
-    const categoryTotalData = categoryPointsChartData[category] || [];
-    const settings = processedData?.scoringSettings;
-    
-    let yAxisLabel = "Puntos";
-    let description = "";
-
-    switch(category) {
-        case 'Physical':
-            yAxisLabel = `Puntos Físico (Pғ)`;
-            description = settings ? `Puntos (máx ${settings.physical.maxPoints}, mín ${settings.physical.minPoints}). T≤${settings.physical.threshold1}min = ${settings.physical.maxPoints}pts, T≥${settings.physical.threshold2}min = ${settings.physical.minPoints}pts.` : 'Puntos de rendimiento físico.';
-            break;
-        case 'Mental':
-            yAxisLabel = `Puntos Mental (Pᴍ)`;
-            description = settings ? `Puntos (máx ${settings.mental.maxPoints}, mín ${settings.mental.minPoints}). T≤${settings.mental.threshold1}min = ${settings.mental.maxPoints}pts, T≥${settings.mental.threshold2}min = ${settings.mental.minPoints}pts.` : 'Puntos de rendimiento mental.';
-            break;
-        case 'Extra':
-            yAxisLabel = `Puntos Extras (Pᴇ)`;
-            description = settings ? `Puntos (máx ${settings.extras.capMax}, mín ${settings.extras.capMin}). Calculado de estados (Muy Bien, Regular, No Hecho) para juegos opcionales y obligatorios.` : 'Puntos por juegos extra.';
-            break;
-    }
-
+    const mainChartData = categoryPointsChartData[category] || [];
+    const isTimeBased = category === 'Physical' || category === 'Mental';
 
     return (
-      <div className="mb-12" key={`category-section-${category}`}>
-        <h2 className="text-3xl font-semibold mb-6 border-b pb-3 text-foreground">{titleSuffix} Rendimiento (Puntos)</h2>
-        {renderBarChart(
-          `Puntos Generales ${category === 'Physical' ? 'Físicos' : category === 'Mental' ? 'Mentales' : 'Extra'}`, 
-          description,
-          categoryTotalData,
-          "score",
-          yAxisLabel,
-          `total-points-${category.toLowerCase()}`,
-          true,
-          false 
-        )}
+      <div className="space-y-8">
+        <div className="flex items-center gap-4">
+          <div className={`p-3 rounded-lg bg-gradient-to-br ${mainColor}`}>
+            {React.createElement(icon, { className: "w-6 h-6 text-white" })}
+          </div>
+          <h2 className="text-3xl font-bold text-foreground">{title}</h2>
+        </div>
+        
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+          {renderModernBarChart(
+            `Puntos Generales ${category === 'Physical' ? 'Físicos (Pғ)' : category === 'Mental' ? 'Mentales (Pᴍ)' : 'Extra (Pᴇ)'}`,
+            mainChartData,
+            "score",
+            "Puntos",
+            getColor(category === 'Physical' ? 0 : category === 'Mental' ? 1 : 2)
+          )}
 
-        { (category === 'Physical' || category === 'Mental') && categoryGames.length > 0 && (
-          <>
-            <h3 className="text-2xl font-medium mt-10 mb-6 text-foreground/90">Juegos {category === 'Physical' ? 'Físicos' : 'Mentales'} Individuales (Tiempos Brutos)</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {categoryGames.map(game => (
-                <div key={game.id}>
-                {renderBarChart(
-                  game.name,
-                  "", 
-                  individualGameTimeChartData[game.id] || [],
-                  "score",
-                  "Tiempo (min)", 
-                  `game-${game.id}`,
-                  false,
-                  true 
-                )}
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-         { (category === 'Physical' || category === 'Mental') && categoryGames.length === 0 && !isLoadingOverall && !overallError && ( 
-             <p className="text-center text-muted-foreground py-4 mt-6">No hay juegos {category.toLowerCase() === 'physical' ? 'físicos' : 'mentales'} definidos para esta categoría.</p>
-        )}
-        { category === 'Extra' && (
-            <p className="text-center text-muted-foreground py-4 mt-6 text-sm">
-              Los estados individuales de los juegos "Extra" y sus contribuciones de puntos se detallan en las páginas de <strong>Clasificación</strong> y <strong>Cálculos</strong>. 
-              El gráfico de arriba muestra la puntuación final P<sub>Extras</sub>.
+          {isTimeBased && categoryGames.length > 0 && 
+            renderModernBarChart(
+              `Mejores Tiempos: ${categoryGames[0].name}`,
+              individualGameTimeChartData[categoryGames[0].id] || [],
+              "score",
+              "Tiempo (min)",
+              getColor(category === 'Physical' ? 5 : 6),
+              true
+            )
+          }
+        </div>
+        
+        {isTimeBased && categoryGames.length > 1 &&
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+            {categoryGames.slice(1).map((game, index) =>
+              renderModernBarChart(
+                `Tiempos: ${game.name}`,
+                individualGameTimeChartData[game.id] || [],
+                "score",
+                "Tiempo (min)",
+                getColor(category === 'Physical' ? 7 + index : 9 + index),
+                true
+              )
+            )}
+          </div>
+        }
+         {category === 'Extra' && (
+            <p className="text-center text-muted-foreground py-4 text-sm">
+              Los estados individuales y sus puntos se detallan en <strong>Clasificación</strong> y <strong>Cálculos</strong>.
             </p>
         )}
       </div>
@@ -235,28 +280,100 @@ export default function TrendsPage() {
   };
 
   if (overallError) {
-    return <p className="text-destructive text-center py-8">Error al cargar los datos de tendencias: {(overallError as Error).message}</p>;
+    return <p className="text-destructive text-center py-8">Error al cargar datos: {(overallError as Error).message}</p>;
+  }
+  
+  if (isLoadingOverall || !processedData) {
+     return (
+       <>
+        <PageHeader title="Análisis de Tendencias" description="Visualización avanzada del rendimiento."/>
+        <div className="space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-36 w-full rounded-2xl" />)}
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <Skeleton className="h-[450px] w-full rounded-2xl" />
+                <Skeleton className="h-[450px] w-full rounded-2xl" />
+            </div>
+        </div>
+       </>
+     )
   }
 
   return (
     <>
       <PageHeader
-        title="Tendencias de Rendimiento"
-        description="Analiza puntos generales por categoría y tiempos brutos de juegos individuales basados en los últimos resultados y la configuración actual."
+        title="Análisis de Tendencias"
+        description="Visualización avanzada del rendimiento por categorías con gráficas interactivas y estadísticas detalladas."
       />
-      <div className="space-y-10">
-        {isLoadingOverall && (!processedData || !processedData.scoringSettings) ? (
-          <>
-            <Skeleton className="h-[600px] w-full mb-8 shadow-lg" key="skeleton-physical-points" />
-            <Skeleton className="h-[600px] w-full mb-8 shadow-lg" key="skeleton-mental-points" />
-            <Skeleton className="h-[600px] w-full shadow-lg" key="skeleton-extra-points" />
-          </>
-        ) : (
-          <>
-            {renderCategorySection('Physical', 'Desafío Físico')}
-            {renderCategorySection('Mental', 'Desafío Mental')}
-            {renderCategorySection('Extra', 'Bonus Extra')}
-          </>
+      
+      <div className="space-y-12">
+        {statsData && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <StatCard icon={Users} title="Participantes Activos" value={statsData.totalParticipants.toString()} colorClass="bg-gradient-to-r from-blue-500 to-cyan-600" />
+            <StatCard icon={Timer} title="Promedio Puntos Físicos" value={`${statsData.avgPhysical} pts`} colorClass="bg-gradient-to-r from-purple-500 to-pink-600" />
+            <StatCard icon={Activity} title="Promedio Puntos Mentales" value={`${statsData.avgMental} pts`} colorClass="bg-gradient-to-r from-green-500 to-emerald-600" />
+            <StatCard icon={Trophy} title="Puntuación Total Máxima" value={`${statsData.maxTotal} pts`} colorClass="bg-gradient-to-r from-orange-500 to-red-600" />
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+          <Card className="shadow-lg hover:shadow-xl transition-all duration-300 lg:col-span-3">
+            <CardHeader>
+              <CardTitle className="text-xl flex items-center gap-2"><TrendingUp className="w-5 h-5 text-blue-500" />Distribución de Puntos por Categoría</CardTitle>
+              <CardDescription>Comparación acumulativa de puntos físicos, mentales y extra entre participantes.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ChartContainer config={{}} className="h-[400px] w-full">
+                <ResponsiveContainer>
+                  <AreaChart data={progressAreaData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="areaColor1" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.8}/><stop offset="95%" stopColor="#8B5CF6" stopOpacity={0.1}/></linearGradient>
+                      <linearGradient id="areaColor2" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#06B6D4" stopOpacity={0.8}/><stop offset="95%" stopColor="#06B6D4" stopOpacity={0.1}/></linearGradient>
+                      <linearGradient id="areaColor3" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10B981" stopOpacity={0.8}/><stop offset="95%" stopColor="#10B981" stopOpacity={0.1}/></linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" tickFormatter={(value) => value.length > 10 ? `${value.substring(0,8)}...` : value} />
+                    <YAxis stroke="hsl(var(--muted-foreground))" />
+                    <ChartTooltip content={<ModernTooltip />} />
+                    <Area type="monotone" dataKey="Puntos Físico" stackId="1" stroke="#8B5CF6" fill="url(#areaColor1)" />
+                    <Area type="monotone" dataKey="Puntos Mental" stackId="1" stroke="#06B6D4" fill="url(#areaColor2)" />
+                    <Area type="monotone" dataKey="Puntos Extra" stackId="1" stroke="#10B981" fill="url(#areaColor3)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </ChartContainer>
+            </CardContent>
+          </Card>
+          
+          <Card className="shadow-lg hover:shadow-xl transition-all duration-300 lg:col-span-2">
+            <CardHeader>
+              <CardTitle className="text-xl flex items-center gap-2"><Target className="w-5 h-5 text-purple-500" />Análisis Top 5 Participantes</CardTitle>
+               <CardDescription>Rendimiento multidimensional de los mejores participantes.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ChartContainer config={{}} className="h-[400px] w-full">
+                <ResponsiveContainer>
+                  <RadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData}>
+                    <PolarGrid stroke="hsl(var(--border))" />
+                    <PolarAngleAxis dataKey="subject" className="text-xs" />
+                    <PolarRadiusAxis angle={30} domain={[0, 100]} />
+                    <ChartTooltip content={<ModernTooltip />} />
+                    <Radar name="P. Físico" dataKey="P. Físico" stroke="#8B5CF6" fill="#8B5CF6" fillOpacity={0.4} />
+                    <Radar name="P. Mental" dataKey="P. Mental" stroke="#06B6D4" fill="#06B6D4" fillOpacity={0.4} />
+                    <Radar name="P. Extras" dataKey="P. Extras" stroke="#10B981" fill="#10B981" fillOpacity={0.4} />
+                  </RadarChart>
+                </ResponsiveContainer>
+              </ChartContainer>
+            </CardContent>
+          </Card>
+        </div>
+
+        {processedData && (
+          <div className="space-y-12 mt-12">
+            {renderCategorySection('Physical', 'Rendimiento Físico', Timer, 'from-purple-500 to-pink-600')}
+            {renderCategorySection('Mental', 'Rendimiento Mental', Activity, 'from-blue-500 to-cyan-600')}
+            {renderCategorySection('Extra', 'Puntos Extra', Zap, 'from-green-500 to-emerald-600')}
+          </div>
         )}
       </div>
     </>
