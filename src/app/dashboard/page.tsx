@@ -1,39 +1,26 @@
 
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { PageHeader } from "@/components/page-header";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Skeleton } from "@/components/ui/skeleton";
-import type { Participant, Score, Game, LeaderboardEntry, ExtraGameStatusDetail, ScoringSettings } from "@/types";
-import { Icons } from "@/components/icons";
-import { formatDistanceToNowStrict } from 'date-fns';
-import { es } from 'date-fns/locale';
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { getParticipants, getGames, getScores, getRecentScores, getScoringSettings } from "@/lib/firestore-services";
+import type { Participant, Score, Game, LeaderboardEntry, ScoringSettings } from "@/types";
+import { getParticipants, getGames, getScores, getScoringSettings } from "@/lib/firestore-services";
 import { calculateAllParticipantScores } from "@/lib/data-utils"; 
+import { ChartContainer, ModernBarChart, ModernPieChart, StatCard } from "@/components/dashboard/modern-charts";
+import { Users, Gamepad2, Sigma, Activity, Award } from 'lucide-react';
+import { Skeleton } from "@/components/ui/skeleton";
+
 
 interface DashboardData {
   totalParticipants: number;
   totalGames: number;
   averageTotalPoints: number | null; 
-  topPerformers: LeaderboardEntry[]; 
-  recentScoresData: (Score & { participantName?: string, scoreSummary?: string })[]; 
   totalScoresLogged: number;
+  topPerformersData: { name: string, 'Puntos Totales': number }[];
+  gameCategoryData: { name: string; value: number; color: string; }[];
 }
 
 export default function DashboardPage() {
-  const [currentTime, setCurrentTime] = useState<string>(""); 
-
-  useEffect(() => {
-    const now = new Date();
-    setCurrentTime(now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-    const timerId = setInterval(() => setCurrentTime(new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' })), 1000);
-    return () => clearInterval(timerId);
-  }, []);
-
   const { data: participants = [], isLoading: isLoadingParticipants, error: errorParticipants } = useQuery<Participant[]>({
     queryKey: ["participants"],
     queryFn: getParticipants,
@@ -49,235 +36,144 @@ export default function DashboardPage() {
     queryFn: getScores,
   });
   
-  const { data: recentScoresRaw = [], isLoading: isLoadingRecentScores, error: errorRecentScores } = useQuery<Score[]>({
-    queryKey: ["recentScores"],
-    queryFn: () => getRecentScores(5),
-  });
-
   const { data: scoringSettings, isLoading: isLoadingSettings, error: errorSettings } = useQuery<ScoringSettings>({
     queryKey: ["scoringSettings"],
     queryFn: getScoringSettings,
   });
 
-  const isLoadingOverall = isLoadingParticipants || isLoadingGames || isLoadingScores || isLoadingRecentScores || isLoadingSettings;
-  const overallError = errorParticipants || errorGames || errorScores || errorRecentScores || errorSettings;
-
+  const isLoadingOverall = isLoadingParticipants || isLoadingGames || isLoadingScores || isLoadingSettings;
+  const overallError = errorParticipants || errorGames || errorScores || errorSettings;
 
   const dashboardData = useMemo((): DashboardData | null => {
     if (isLoadingOverall || overallError || !participants.length || !games || !allScores || !scoringSettings) { 
       return null; 
     }
 
-    const participantsMap = new Map(participants.map(p => [p.id, p.name]));
     const totalParticipants = participants.length;
     const totalGames = games.length;
     const totalScoresLogged = allScores.length;
 
-    let topPerformers: LeaderboardEntry[] = [];
+    let leaderboard: LeaderboardEntry[] = [];
     let averageTotalPoints: number | null = null;
-
+    
     if (allScores.length > 0 && participants.length > 0 && games.length > 0) {
-        const leaderboard = calculateAllParticipantScores(participants, allScores, games, scoringSettings);
-        topPerformers = leaderboard.slice(0, 3);
-
+        leaderboard = calculateAllParticipantScores(participants, allScores, games, scoringSettings);
         const totalPointsList = leaderboard.map(entry => entry.puntos_total);
         averageTotalPoints = totalPointsList.length > 0 
-        ? totalPointsList.reduce((sum, score) => sum + score, 0) / totalPointsList.length 
-        : null;
+          ? totalPointsList.reduce((sum, score) => sum + score, 0) / totalPointsList.length 
+          : null;
     }
       
-    const recentScoresData = recentScoresRaw.map(score => {
-        let extraSummary = "N/A";
-        if (score.extraGameDetailedStatuses && Object.keys(score.extraGameDetailedStatuses).length > 0) {
-            const statuses = Object.values(score.extraGameDetailedStatuses);
-            const muyBienCount = statuses.filter(s => s === 'muy_bien').length;
-            const regularCount = statuses.filter(s => s === 'regular').length;
-            const noHechoCount = statuses.filter(s => s === 'no_hecho').length;
-            
-            const parts: string[] = [];
-            if (muyBienCount > 0) parts.push(`${muyBienCount} MB`);
-            if (regularCount > 0) parts.push(`${regularCount} R`);
-            if (noHechoCount > 0) parts.push(`${noHechoCount} NH`);
+    const topPerformersData = leaderboard.slice(0, 5).map(p => ({
+        name: p.name.split(' ')[0], // Use first name for brevity
+        'Puntos Totales': parseFloat(p.puntos_total.toFixed(1))
+    })).reverse();
 
-            if (parts.length > 0) {
-                extraSummary = parts.join(', ');
-            } else if (statuses.length > 0) { 
-                extraSummary = `${statuses.length} Extras`;
-            } else {
-                 extraSummary = "Sin detalle extra";
-            }
-        } else {
-            const definedExtraGamesCount = games.filter(g => g.category === 'Extra').length;
-            if (definedExtraGamesCount > 0) {
-                extraSummary = "Sin datos de juegos extra";
-            } else {
-                extraSummary = "No hay juegos extra definidos";
-            }
-        }
-        
-        let scoreDetail = `T.Físico: ${score.tiempo_fisico.toFixed(1)} min, T.Mental: ${score.tiempo_mental.toFixed(1)} min`;
-        if (score.puntos_fisico !== undefined && score.puntos_mental !== undefined && score.puntos_extras !== undefined) {
-             scoreDetail = `P.Fís: ${score.puntos_fisico.toFixed(1)}, P.Ment: ${score.puntos_mental.toFixed(1)}, P.Ext: ${score.puntos_extras.toFixed(1)}`;
-        }
-
-
-        return {
-            ...score,
-            participantName: participantsMap.get(score.participantId) || "Desconocido",
-            scoreSummary: `${scoreDetail}, Extras: ${extraSummary}`
-        };
-    });
+    const gameCategoryData = [
+        { name: 'Físicos', value: games.filter(g => g.category === 'Physical').length, color: '#8B5CF6' },
+        { name: 'Mentales', value: games.filter(g => g.category === 'Mental').length, color: '#06B6D4' },
+        { name: 'Extras', value: games.filter(g => g.category === 'Extra').length, color: '#10B981' }
+    ].filter(item => item.value > 0);
 
 
     return {
       totalParticipants,
       totalGames,
       averageTotalPoints,
-      topPerformers,
-      recentScoresData,
       totalScoresLogged,
+      topPerformersData,
+      gameCategoryData
     };
-  }, [participants, games, allScores, recentScoresRaw, scoringSettings, isLoadingOverall, overallError]);
+  }, [participants, games, allScores, scoringSettings, isLoadingOverall, overallError]);
 
 
-  const StatCard = ({ title, value, icon: Icon, description, isLoading }: { title: string; value: string | number | null; icon: Icons.Icon; description?: string, isLoading?: boolean }) => (
-    <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
-        <Icon className="h-5 w-5 text-primary" />
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <>
-            <Skeleton className="h-8 w-3/4 mb-2" />
-            {description && <Skeleton className="h-4 w-1/2" />}
-          </>
-        ) : (
-          <>
-            <div className="text-3xl font-bold text-foreground">{value === null || value === undefined ? 'N/A' : value}</div>
-            {description && <p className="text-xs text-muted-foreground pt-1">{description}</p>}
-          </>
-        )}
-      </CardContent>
-    </Card>
-  );
+  const colorScheme = {
+    gradients: {
+      purple: "from-purple-500 to-pink-600",
+      blue: "from-blue-500 to-cyan-600", 
+      green: "from-green-500 to-emerald-600",
+      orange: "from-orange-500 to-red-600"
+    }
+  };
 
   if (overallError) {
     return <p className="text-destructive text-center py-8">Error al cargar los datos del panel: {(overallError as Error).message}</p>;
   }
 
+  if (isLoadingOverall) {
+    return (
+      <div>
+        <Skeleton className="h-12 w-1/2 mb-8" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-36 w-full rounded-2xl" />)}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+            <Skeleton className="h-[376px] w-full rounded-2xl lg:col-span-3" />
+            <Skeleton className="h-[376px] w-full rounded-2xl lg:col-span-2" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
-      <PageHeader
-        title="Panel de Control de la Competición"
-        description={currentTime ? `Resumen de actividades de ChronoScore. Hora actual: ${currentTime}` : "Cargando hora..."}
-      />
-
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 mb-8">
-        <StatCard 
-          title="Total de Participantes" 
-          value={dashboardData?.totalParticipants ?? 0} 
-          icon={Icons.Users} 
-          description="Competidores registrados actualmente."
-          isLoading={isLoadingOverall}
-        />
-        <StatCard 
-          title="Total de Juegos" 
-          value={dashboardData?.totalGames ?? 0} 
-          icon={Icons.Gamepad2}
-          description="Juegos definidos para la competición."
-          isLoading={isLoadingOverall}
-        />
-        <StatCard 
-          title="Media de Puntos Totales (Pᴛ)" 
-          value={dashboardData?.averageTotalPoints !== null && dashboardData?.averageTotalPoints !== undefined ? `${dashboardData.averageTotalPoints.toFixed(1)} pts` : 'N/A'} 
-          icon={Icons.Sigma}
-          description={scoringSettings ? `Pᴛ basado en P.Fís (${scoringSettings.physical.minPoints}-${scoringSettings.physical.maxPoints}), P.Ment (${scoringSettings.mental.minPoints}-${scoringSettings.mental.maxPoints}), P.Ext (${scoringSettings.extras.capMin}-${scoringSettings.extras.capMax})` : "Media de los puntos totales finales (Pᴛ)."}
-          isLoading={isLoadingOverall}
-        />
-        <StatCard 
-          title="Puntuaciones Registradas" 
-          value={dashboardData?.totalScoresLogged ?? 0} 
-          icon={Icons.Activity}
-          description="Total de puntuaciones brutas registradas."
-          isLoading={isLoadingOverall}
-        />
+      <div className="mb-8">
+        <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-cyan-400 mb-2">
+          Panel de Control
+        </h1>
+        <p className="text-gray-400">Estadísticas en tiempo real de la competición ChronoScore.</p>
       </div>
 
-      <div className="grid gap-8 md:grid-cols-2">
-        <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Icons.Award className="mr-2 h-6 w-6 text-yellow-500" /> Mejores Participantes
-            </CardTitle>
-            <CardDescription>Top 3 participantes por Puntos Totales (Pᴛ). Más alto es mejor.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isLoadingOverall && !dashboardData ? (
-              <div className="space-y-4">
-                {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
-              </div>
-            ) : dashboardData && dashboardData.topPerformers.length > 0 ? (
-              <ul className="space-y-3">
-                {dashboardData.topPerformers.map((performer, index) => (
-                  <li key={performer.id} className="flex items-center space-x-3 p-3 bg-muted/30 rounded-md hover:bg-muted/60 transition-colors">
-                    <span className={`text-lg font-semibold w-6 text-center ${index === 0 ? 'text-yellow-500' : index === 1 ? 'text-gray-400' : index === 2 ? 'text-orange-400' : 'text-muted-foreground'}`}>
-                      {performer.rank}
-                    </span>
-                    <Avatar className="h-10 w-10 border">
-                      <AvatarImage src={performer.photoUrl || undefined} alt={performer.name} data-ai-hint="person face" />
-                      <AvatarFallback>{performer.name.substring(0, 2).toUpperCase()}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1">
-                      <p className="font-medium text-foreground">{performer.name}</p>
-                      <p className="text-sm text-muted-foreground">Puntos Totales (Pᴛ): {performer.puntos_total.toFixed(1)} pts</p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-center text-muted-foreground py-4">Aún no hay datos de rendimiento. Añade puntuaciones para ver la clasificación.</p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Icons.CalendarClock className="mr-2 h-6 w-6 text-blue-500" /> Actividad Reciente
-            </CardTitle>
-            <CardDescription>Últimas 5 puntuaciones brutas registradas.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isLoadingOverall && !dashboardData ? (
-               <div className="space-y-3">
-                {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
-              </div>
-            ) : dashboardData && dashboardData.recentScoresData.length > 0 ? (
-              <ScrollArea className="h-[280px]">
-                <ul className="space-y-2 pr-3">
-                  {dashboardData.recentScoresData.map((score) => (
-                    <li key={score.id} className="flex justify-between items-center p-3 bg-muted/30 rounded-md hover:bg-muted/60 transition-colors">
-                      <div>
-                        <p className="font-medium text-foreground">
-                          {score.participantName}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                         {score.scoreSummary}
-                        </p>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {score.recordedAt ? formatDistanceToNowStrict(new Date(score.recordedAt), { addSuffix: true, locale: es }) : 'Fecha inválida'}
-                      </p>
-                    </li>
-                  ))}
-                </ul>
-              </ScrollArea>
-            ) : (
-              <p className="text-center text-muted-foreground py-4">Aún no se han registrado puntuaciones.</p>
-            )}
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <StatCard 
+          title="Total de Participantes"
+          value={dashboardData?.totalParticipants ?? 0}
+          change={2.1} // Placeholder
+          gradientColor={colorScheme.gradients.purple}
+          icon={<Users className="w-6 h-6 text-white" />}
+        />
+        <StatCard 
+          title="Total de Juegos"
+          value={dashboardData?.totalGames ?? 0}
+          change={0} // Placeholder
+          gradientColor={colorScheme.gradients.blue}
+          icon={<Gamepad2 className="w-6 h-6 text-white" />}
+        />
+        <StatCard 
+          title="Media de Puntos Totales"
+          value={dashboardData?.averageTotalPoints?.toFixed(1) ?? 'N/A'}
+          change={-1.5} // Placeholder
+          gradientColor={colorScheme.gradients.orange}
+          icon={<Sigma className="w-6 h-6 text-white" />}
+        />
+        <StatCard 
+          title="Puntuaciones Registradas"
+          value={dashboardData?.totalScoresLogged ?? 0}
+          change={10.3} // Placeholder
+          gradientColor={colorScheme.gradients.green}
+          icon={<Activity className="w-6 h-6 text-white" />}
+        />
+      </div>
+      
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+          <div className="lg:col-span-3">
+              <ChartContainer title="Mejores Participantes (Puntos Totales)" icon={<Award />}>
+                  {dashboardData && dashboardData.topPerformersData.length > 0 ? (
+                    <ModernBarChart data={dashboardData.topPerformersData} dataKey="Puntos Totales" />
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-gray-500">Aún no hay datos de rendimiento.</div>
+                  )}
+              </ChartContainer>
+          </div>
+          <div className="lg:col-span-2">
+              <ChartContainer title="Distribución de Juegos" icon={<Gamepad2 />}>
+                  {dashboardData && dashboardData.gameCategoryData.length > 0 ? (
+                    <ModernPieChart data={dashboardData.gameCategoryData} />
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-gray-500">No hay juegos definidos.</div>
+                  )}
+              </ChartContainer>
+          </div>
       </div>
     </>
   );

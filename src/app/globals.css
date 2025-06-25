@@ -2,496 +2,79 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ===== CSS VARIABLES ===== */
 @layer base {
   :root {
-    /* Base colors - Soft Light Theme */
-    --background: 210 60% 98%; /* Softer, very light cool gray */
-    --foreground: 220 25% 25%; /* Dark, slightly desaturated blue-gray */
-    
-    /* Card colors */
-    --card: 0 0% 100%; /* White */
-    --card-foreground: 220 25% 25%;
-    
-    /* Popover colors */
-    --popover: 0 0% 100%;
-    --popover-foreground: 220 25% 25%;
-    
-    /* Primary colors */
-    --primary: 217 91% 60%; /* Brighter, modern blue */
-    --primary-foreground: 210 40% 98%; /* Light text on primary */
-    
-    /* Secondary colors */
-    --secondary: 210 40% 96.1%; /* Light gray, slightly bluish */
-    --secondary-foreground: 220 25% 25%;
-    
-    /* Muted colors */
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215 20% 55%; /* Softer muted text */
-    
-    /* Accent colors */
-    --accent: 210 40% 93%; /* Slightly darker accent for hover states */
-    --accent-foreground: 220 25% 15%; /* Darker text on accent */
-    
-    /* Status colors */
-    --destructive: 0 72% 51%; /* Standard red */
+    /* New Modern Dark Theme */
+    --background: 224 71.4% 4.1%; /* gray-950 */
+    --foreground: 210 20% 98%; /* light text */
+
+    --card: 220 25% 15%;
+    --card-foreground: 210 20% 98%;
+
+    --popover: 222 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+
+    /* Purple accent */
+    --primary: 262.1 83.3% 57.8%; /* purple-500 */
+    --primary-foreground: 210 20% 98%;
+
+    --secondary: 220 25% 25%;
+    --secondary-foreground: 210 20% 98%;
+
+    --muted: 215 20.2% 34.1%;
+    --muted-foreground: 215 27.9% 65.9%;
+
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
     
     --success: 142 71% 45%; 
     --success-foreground: 210 40% 98%;
     
     --warning: 38 92% 50%;
-    --warning-foreground: 220 25% 25%;
+    --warning-foreground: 210 40% 98%;
     
     --info: 199 89% 48%;
     --info-foreground: 210 40% 98%;
-    
-    /* UI colors */
-    --border: 210 30% 90%; /* Softer border */
-    --input: 210 30% 90%;
-    --ring: 217 91% 60%; /* Primary color for rings */
-    
+
+    --border: 217.2 32.6% 17.5%; /* gray-800/700 */
+    --input: 217.2 32.6% 17.5%;
+    --ring: 263.4 70% 50.4%;
+
     /* Chart colors */
-    --chart-1: 217 91% 60%; /* Primary blue */
-    --chart-2: 173 58% 39%; /* Teal */
-    --chart-3: 27 87% 67%; /* Orange */
-    --chart-4: 320 70% 65%; /* Purple/Pink */
-    --chart-5: 50 90% 55%; /* Yellow/Gold */
-    
+    --chart-1: 262 83% 58%; /* purple */
+    --chart-2: 188 81% 44%; /* cyan */
+    --chart-3: 142 71% 45%; /* green */
+    --chart-4: 41 91% 51%;  /* orange */
+    --chart-5: 0 84% 60%;   /* red */
+
     /* Sidebar colors */
-    --sidebar-background: 210 50% 96%; /* Slightly off-white, matching secondary/muted */
-    --sidebar-foreground: 220 25% 35%;
-    --sidebar-primary: 217 91% 60%;
-    --sidebar-primary-foreground: 210 40% 98%;
-    --sidebar-accent: 210 40% 90%; /* Softer accent for sidebar hover */
-    --sidebar-accent-foreground: 220 25% 15%;
-    --sidebar-border: 210 30% 88%;
-    --sidebar-ring: 217 91% 55%;
+    --sidebar-background: 224 71.4% 4.1%;
+    --sidebar-foreground: 210 20% 98%;
+    --sidebar-primary: 262.1 83.3% 57.8%;
+    --sidebar-primary-foreground: 210 20% 98%;
+    --sidebar-accent: 217.2 32.6% 17.5%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 217.2 32.6% 17.5%;
+    --sidebar-ring: 263.4 70% 50.4%;
     
     /* Border radius */
-    --radius: 0.5rem; /* Standardized radius */
-    
-    /* Typography */
-    --font-sans: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
-    
-    /* Shadows */
-    --shadow-color: 220 30% 15%; /* Darker base for shadows */
-    --shadow-strength: 0.5%; /* Reduced strength for softer shadows */
+    --radius: 1rem;
   }
 
   .dark {
-    /* Base colors - Soft Dark Theme */
-    --background: 220 25% 12%; /* Dark desaturated blue */
-    --foreground: 210 40% 90%; /* Light gray text */
-    
-    /* Card colors */
-    --card: 220 25% 18%; /* Slightly lighter dark for cards */
-    --card-foreground: 210 40% 90%;
-    
-    /* Popover colors */
-    --popover: 220 25% 15%;
-    --popover-foreground: 210 40% 90%;
-    
-    /* Primary colors */
-    --primary: 217 91% 65%; /* Brighter blue for dark mode */
-    --primary-foreground: 220 25% 10%; /* Dark text on primary */
-    
-    /* Secondary colors */
-    --secondary: 220 25% 22%; /* Darker gray */
-    --secondary-foreground: 210 40% 90%;
-    
-    /* Muted colors */
-    --muted: 220 25% 22%;
-    --muted-foreground: 215 20% 65%;
-    
-    /* Accent colors */
-    --accent: 220 25% 25%; /* Darker accent for hover */
-    --accent-foreground: 210 40% 95%;
-    
-    /* Status colors */
-    --destructive: 0 63% 51%;
-    --destructive-foreground: 210 40% 98%;
-    
-    --success: 142 61% 45%;
-    --success-foreground: 210 40% 98%;
-    
-    --warning: 38 92% 55%;
-    --warning-foreground: 220 25% 10%;
-    
-    --info: 199 89% 53%;
-    --info-foreground: 210 40% 98%;
-    
-    /* UI colors */
-    --border: 220 25% 28%; /* Softer dark border */
-    --input: 220 25% 28%;
-    --ring: 217 91% 65%; /* Primary color for rings */
-    
-    /* Chart colors */
-    --chart-1: 217 91% 65%; /* Primary blue (darker theme) */
-    --chart-2: 173 50% 45%; /* Teal (darker theme) */
-    --chart-3: 27 80% 60%; /* Orange (darker theme) */
-    --chart-4: 320 65% 60%; /* Purple/Pink (darker theme) */
-    --chart-5: 50 85% 50%; /* Yellow/Gold (darker theme) */
-    
-    /* Sidebar colors */
-    --sidebar-background: 220 25% 15%; /* Slightly different dark shade for sidebar */
-    --sidebar-foreground: 210 40% 85%;
-    --sidebar-primary: 217 91% 65%;
-    --sidebar-primary-foreground: 220 25% 10%;
-    --sidebar-accent: 220 25% 28%; /* Softer accent for dark sidebar hover */
-    --sidebar-accent-foreground: 210 40% 95%;
-    --sidebar-border: 220 25% 25%;
-    --sidebar-ring: 217 91% 60%;
-    
-    /* Shadows */
-    --shadow-color: 220 20% 5%;
-    --shadow-strength: 10%;
+    /* All variables from :root are inherited, making dark theme the default */
   }
 }
 
-/* ===== BASE STYLES ===== */
 @layer base {
-  /* Reset and base styles */
   * {
     @apply border-border;
   }
-  
-  *,
-  *::before,
-  *::after {
-    box-sizing: border-box;
-  }
-  
-  html {
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    text-rendering: optimizeLegibility;
-    scroll-behavior: smooth;
-  }
-  
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
-    font-synthesis: none;
-    text-rendering: optimizeLegibility;
-  }
-  
-  /* Typography improvements */
-  h1, h2, h3, h4, h5, h6 {
-    @apply font-semibold tracking-tight;
-    text-wrap: balance;
-  }
-  
-  h1 {
-    @apply text-3xl lg:text-4xl; /* Slightly reduced for a cleaner look */
-  }
-  
-  h2 {
-    @apply text-2xl lg:text-3xl;
-  }
-  
-  h3 {
-    @apply text-xl lg:text-2xl;
-  }
-  
-  h4 {
-    @apply text-lg lg:text-xl;
-  }
-  
-  h5 {
-    @apply text-base lg:text-lg;
-  }
-  
-  h6 {
-    @apply text-sm lg:text-base;
-  }
-  
-  p {
-    @apply leading-7;
-    text-wrap: pretty;
-  }
-  
-  /* Link styles */
-  a {
-    @apply text-primary underline-offset-4 hover:underline hover:text-primary/80; /* Softer hover */
-    transition: color 0.2s ease-in-out;
-  }
-  
-  /* Focus styles for accessibility */
-  *:focus-visible {
-    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
-  }
-  
-  /* Button reset */
-  button {
-    @apply cursor-pointer;
-  }
-  
-  button:disabled {
-    @apply cursor-not-allowed opacity-50;
-  }
-  
-  /* Form elements */
-  input, textarea, select {
-    @apply bg-input; /* Ensure input background matches theme */
-  }
-  
-  input::placeholder,
-  textarea::placeholder {
-    @apply text-muted-foreground;
-  }
-  
-  /* Selection styles */
-  ::selection {
-    @apply bg-primary/30 text-primary-foreground; /* Lighter selection */
-  }
-  
-  ::-moz-selection {
-    @apply bg-primary/30 text-primary-foreground;
-  }
-  
-  /* Scrollbar styles */
-  ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-  }
-  
-  ::-webkit-scrollbar-track {
-    @apply bg-muted/50; /* Slightly more transparent track */
-  }
-  
-  ::-webkit-scrollbar-thumb {
-    @apply bg-border rounded-full hover:bg-border/80;
-  }
-    
-  /* Firefox scrollbar */
-  * {
-    scrollbar-width: thin;
-    scrollbar-color: hsl(var(--border)) hsl(var(--muted)/0.5);
-  }
-  
-  /* Image optimization */
-  img {
-    @apply max-w-full h-auto;
-  }
-  
-  /* Code blocks */
-  code {
-    @apply relative rounded bg-muted px-[0.3rem] py-[0.2rem] font-mono text-sm font-semibold;
-  }
-  
-  pre {
-    @apply overflow-x-auto rounded-lg bg-muted p-4;
-  }
-  
-  pre code {
-    @apply bg-transparent p-0;
-  }
-  
-  /* Tables */
-  table {
-    @apply w-full border-collapse;
-  }
-  
-  th, td {
-    @apply border-b border-border px-4 py-2 text-left;
-  }
-  
-  th {
-    @apply font-semibold;
-  }
-  
-  /* Blockquotes */
-  blockquote {
-    @apply border-l-4 border-primary pl-4 italic text-muted-foreground; /* Softer blockquote */
-  }
-  
-  /* HR */
-  hr {
-    @apply border-border/70; /* Softer hr */
-  }
-}
-
-/* ===== UTILITY CLASSES ===== */
-@layer utilities {
-  /* Text utilities */
-  .text-balance {
-    text-wrap: balance;
-  }
-  
-  .text-pretty {
-    text-wrap: pretty;
-  }
-  
-  /* Animation utilities */
-  .animate-in {
-    animation-duration: 0.2s;
-    animation-fill-mode: both;
-  }
-  
-  .animate-out {
-    animation-duration: 0.2s;
-    animation-fill-mode: both;
-  }
-  
-  /* Scrollbar utilities */
-  .scrollbar-none {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-  }
-  
-  .scrollbar-none::-webkit-scrollbar {
-    display: none;
-  }
-  
-  .scrollbar-thin {
-    scrollbar-width: thin;
-  }
-  
-  /* Focus utilities */
-  .focus-ring {
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background;
-  }
-  
-  /* Glass effect */
-  .glass {
-    @apply bg-background/80 backdrop-blur-md border border-border/50;
-  }
-  
-  /* Gradient text */
-  .gradient-text {
-    @apply bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent;
-  }
-  
-  /* Shadow utilities */
-  .shadow-colored { /* Adjusted for new shadow variables */
-    box-shadow: 
-      0 1px 2px hsl(var(--shadow-color) / calc(var(--shadow-strength) + 12%)),
-      0 2px 4px hsl(var(--shadow-color) / calc(var(--shadow-strength) + 10%)),
-      0 4px 8px hsl(var(--shadow-color) / calc(var(--shadow-strength) + 8%)),
-      0 8px 16px hsl(var(--shadow-color) / calc(var(--shadow-strength) + 6%));
-  }
-}
-
-/* ===== COMPONENT STYLES ===== */
-@layer components {
-  /* Loading spinner */
-  .spinner {
-    @apply inline-block h-4 w-4 animate-spin rounded-full border-2 border-solid border-current border-r-transparent motion-reduce:animate-[spin_1.5s_linear_infinite];
-  }
-  
-  /* Skeleton loader */
-  .skeleton {
-    @apply animate-pulse rounded-md bg-muted;
-  }
-  
-  /* Card component - base styles for shadcn card */
-  .card {
-    @apply rounded-lg border bg-card text-card-foreground;
-    /* Default shadow can be added here or via utility classes like shadow-lg */
-  }
-  
-  /* Button variants - Shadcn handles these well, ensure consistency with theme */
-  .btn {
-    @apply inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-ring disabled:pointer-events-none disabled:opacity-50;
-  }
-  
-  .btn-primary {
-    @apply bg-primary text-primary-foreground hover:bg-primary/90;
-  }
-  
-  .btn-secondary {
-    @apply bg-secondary text-secondary-foreground hover:bg-secondary/80;
-  }
-  
-  .btn-outline {
-    @apply border border-input bg-transparent hover:bg-accent hover:text-accent-foreground; /* Ensure bg is transparent */
-  }
-  
-  .btn-ghost {
-    @apply hover:bg-accent hover:text-accent-foreground;
-  }
-  
-  /* Input styles */
-  .input {
-    @apply flex h-10 w-full rounded-md border border-input bg-input px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-ring disabled:cursor-not-allowed disabled:opacity-50;
-  }
-}
-
-/* ===== RESPONSIVE DESIGN ===== */
-@media (max-width: 768px) {
-  html {
-    scroll-behavior: auto;
-  }
-  /* Adjust base font size for smaller screens if needed */
-  /* body { @apply text-sm; } */
-  /* h1 { @apply text-2xl; } */
-  /* ... etc */
-}
-
-/* ===== ACCESSIBILITY ===== */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
-  }
-}
-
-/* ===== PRINT STYLES ===== */
-@media print {
-  * {
-    background: transparent !important;
-    color: black !important;
-    box-shadow: none !important;
-    text-shadow: none !important;
-  }
-  
-  a,
-  a:visited {
-    text-decoration: underline;
-  }
-  
-  a[href]:after {
-    content: " (" attr(href) ")";
-  }
-  
-  abbr[title]:after {
-    content: " (" attr(title) ")";
-  }
-  
-  pre,
-  blockquote {
-    border: 1px solid #999;
-    page-break-inside: avoid;
-  }
-  
-  thead {
-    display: table-header-group;
-  }
-  
-  tr,
-  img {
-    page-break-inside: avoid;
-  }
-  
-  img {
-    max-width: 100% !important;
-  }
-  
-  p,
-  h2,
-  h3 {
-    orphans: 3;
-    widows: 3;
-  }
-  
-  h2,
-  h3 {
-    page-break-after: avoid;
   }
 }

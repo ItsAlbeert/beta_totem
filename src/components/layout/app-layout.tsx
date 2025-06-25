@@ -31,7 +31,6 @@ interface AppLayoutProps {
   children: React.ReactNode;
 }
 
-// Create a client
 const queryClient = new QueryClient();
 
 function SidebarBrand() {
@@ -110,16 +109,13 @@ export function AppLayout({ children }: AppLayoutProps) {
             <NavMenu items={primaryNav} currentPath={pathname} />
           </SidebarContent>
           <SidebarFooter className="group-data-[collapsible=icon]:hidden">
-            {/* Footer content if any, e.g., user profile */}
           </SidebarFooter>
         </Sidebar>
-        <SidebarInset className="flex flex-col">
-          <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b bg-background/80 px-4 backdrop-blur-sm md:px-6">
+        <SidebarInset className="flex flex-col bg-gradient-to-br from-gray-950 via-gray-900 to-purple-950">
+          <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b border-gray-700 bg-gray-950/80 px-4 backdrop-blur-sm md:px-6">
             <div className="flex items-center">
               <SidebarTrigger className="md:hidden" />
-              {/* Add breadcrumbs or page title here if needed */}
             </div>
-            {/* Add user menu or other header actions here */}
             <Button variant="outline" size="sm">Perfil de Usuario</Button>
           </header>
           <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
