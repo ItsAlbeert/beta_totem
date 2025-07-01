@@ -110,14 +110,14 @@ export default function ComparisonsPage() {
       const participantName = entry.name;
       const dataPoint: MultiMetricDataPoint = { name: participantName };
       selectedGames.forEach(game => {
-        dataPoint[game.name] = entry.gameTimes?.[game.id] ?? null; 
+        dataPoint[game.id] = entry.gameTimes?.[game.id] ?? null; 
       });
       return dataPoint;
     });
     
     const chartConfig: ChartConfig = {};
     selectedGames.forEach((game, index) => {
-      chartConfig[game.name] = { label: `${game.name}`, color: getColor(index) }; 
+      chartConfig[game.id] = { label: game.name, color: getColor(index) }; 
     });
 
     return { chartData, chartConfig };
@@ -202,11 +202,11 @@ export default function ComparisonsPage() {
                   <BarChart data={comparisonChart.chartData} margin={{ top: 5, right: 30, left: 0, bottom: 30 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                     <XAxis dataKey="name" tickFormatter={(value) => value.length > 10 ? `${value.substring(0,7)}...` : value} stroke="hsl(var(--muted-foreground))" angle={-30} textAnchor="end" height={60} />
-                    <YAxis label={{ value: "Tiempo (min)", angle: -90, position: 'insideLeft', fill: 'hsl(var(--muted-foreground))', dx: -10 }} stroke="hsl(var(--muted-foreground))" domain={['auto', 'auto']}/>
+                    <YAxis label={{ value: "Tiempo (min)", angle: -90, position: 'insideLeft', fill: 'hsl(var(--muted-foreground))', dx: -10 }} stroke="hsl(var(--muted-foreground))" domain={[0, 'auto']}/>
                     <ChartTooltip content={<ChartTooltipContent indicator="dashed" />} />
                     <ChartLegend content={<ChartLegendContent />} />
-                    {Object.keys(comparisonChart.chartConfig).map((gameName) => (
-                      <Bar key={gameName} dataKey={gameName} fill={comparisonChart.chartConfig[gameName]?.color} radius={4} />
+                    {Object.keys(comparisonChart.chartConfig).map((gameId) => (
+                      <Bar key={gameId} dataKey={gameId} fill={`var(--color-${gameId})`} radius={4} />
                     ))}
                   </BarChart>
                 </ResponsiveContainer>
