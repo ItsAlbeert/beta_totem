@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useMemo } from "react"
+import React, { useMemo } from "react"
 import { useQuery } from "@tanstack/react-query"
 
 import type { Participant, Score, Game, LeaderboardEntry, ScoringSettings } from "@/types"
@@ -8,6 +8,7 @@ import { getParticipants, getGames, getScores, getScoringSettings } from "@/lib/
 import { calculateAllParticipantScores } from "@/lib/data-utils"
 import ParticipantCard from "@/components/dashboard/participant-card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { PageHeader } from "@/components/page-header"
 
 const DashboardPage = () => {
   const { data: participants = [], isLoading: isLoadingParticipants } = useQuery<Participant[]>({
@@ -36,26 +37,21 @@ const DashboardPage = () => {
     if (isLoading || !participants.length || !games.length || !allScores.length || !scoringSettings) {
       return [];
     }
-    return calculateAllParticipantScores(participants, allScores, games, scoringSettings);
+    const calculated = calculateAllParticipantScores(participants, allScores, games, scoringSettings);
+    return calculated.sort((a, b) => a.rank - b.rank);
   }, [participants, games, allScores, scoringSettings, isLoading]);
   
-  const [selectedMetric, setSelectedMetric] = useState("Total");
-
   return (
-    <div className="min-h-screen p-4 sm:p-6 lg:p-8">
-      <div className="space-y-4 mb-8">
-        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">
-          Dashboard de Participantes
-        </h1>
-        <p className="text-muted-foreground">
-          Visualiza el rendimiento de cada participante. Selecciona una métrica para ver la puntuación correspondiente.
-        </p>
-      </div>
+    <>
+      <PageHeader
+        title="Panel de Control"
+        description="Visualiza el rendimiento y la puntuación total de cada participante de un vistazo."
+      />
 
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {[...Array(8)].map((_, i) => (
-            <Skeleton key={i} className="h-[180px] rounded-xl" />
+            <Skeleton key={i} className="h-[160px] rounded-xl" />
           ))}
         </div>
       ) : (
@@ -64,8 +60,6 @@ const DashboardPage = () => {
             <ParticipantCard
               key={participant.id}
               participant={participant}
-              selectedMetric={selectedMetric}
-              onMetricSelect={setSelectedMetric}
             />
           ))}
         </div>
@@ -78,7 +72,7 @@ const DashboardPage = () => {
             </p>
          </div>
        )}
-    </div>
+    </>
   );
 }
 
