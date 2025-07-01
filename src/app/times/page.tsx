@@ -4,9 +4,8 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import { useRouter, useSearchParams } from 'next/navigation';
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -54,8 +53,10 @@ export default function TimesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [editMode, setEditMode] = useState(false);
-  const [editingScoreId, setEditingScoreId] = useState<string | null>(null);
+  // Derive state from URL params instead of using useState to prevent infinite loops
+  const scoreIdFromParams = searchParams.get('edit_score_id');
+  const editMode = !!scoreIdFromParams;
+  const editingScoreId = scoreIdFromParams;
 
   const { data: participants = [], isLoading: isLoadingParticipants, error: errorParticipants } = useQuery<Participant[]>({
     queryKey: ["participants"],
@@ -78,8 +79,6 @@ export default function TimesPage() {
     },
   });
   
-  const scoreIdFromParams = searchParams.get('edit_score_id');
-
   const { data: scoreToEdit, isLoading: isLoadingScoreToEdit, isError: isErrorScoreToEdit } = useQuery({
     queryKey: ['scoreToEdit', scoreIdFromParams],
     queryFn: () => scoreIdFromParams ? getScoreById(scoreIdFromParams) : Promise.resolve(null),
@@ -87,10 +86,7 @@ export default function TimesPage() {
   });
 
   useEffect(() => {
-    const isEdit = !!scoreIdFromParams;
-    setEditMode(isEdit);
-    setEditingScoreId(scoreIdFromParams);
-
+    // This effect now only syncs the form state with the URL and fetched data
     const defaultExtraStatuses: { [key: string]: ExtraGameStatusDetail } = {};
     if (games) {
       games.filter(g => g.category === 'Extra').forEach(g => {
@@ -98,17 +94,15 @@ export default function TimesPage() {
       });
     }
 
-    if (isEdit) {
-      if (scoreToEdit) {
-        form.reset({
-          participantId: scoreToEdit.participantId,
-          tiempo_fisico: scoreToEdit.tiempo_fisico,
-          tiempo_mental: scoreToEdit.tiempo_mental,
-          gameTimes: scoreToEdit.gameTimes || {},
-          extraGameDetailedStatuses: { ...defaultExtraStatuses, ...(scoreToEdit.extraGameDetailedStatuses || {}) },
-        });
-      }
-    } else {
+    if (editMode && scoreToEdit) {
+      form.reset({
+        participantId: scoreToEdit.participantId,
+        tiempo_fisico: scoreToEdit.tiempo_fisico,
+        tiempo_mental: scoreToEdit.tiempo_mental,
+        gameTimes: scoreToEdit.gameTimes || {},
+        extraGameDetailedStatuses: { ...defaultExtraStatuses, ...(scoreToEdit.extraGameDetailedStatuses || {}) },
+      });
+    } else if (!editMode) {
       form.reset({
         participantId: "",
         tiempo_fisico: 0,
@@ -117,7 +111,7 @@ export default function TimesPage() {
         extraGameDetailedStatuses: defaultExtraStatuses,
       });
     }
-  }, [scoreIdFromParams, scoreToEdit, games]);
+  }, [editMode, scoreToEdit, games]);
 
 
   const addScoreMutation = useMutation({
