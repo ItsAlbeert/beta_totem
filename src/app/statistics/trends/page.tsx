@@ -231,16 +231,18 @@ export default function TrendsPage() {
         
         {isTimeBased && categoryGames.length > 1 &&
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
-            {categoryGames.slice(1).map((game, index) =>
-              renderModernBarChart(
-                `Tiempos: ${game.name}`,
-                individualGameTimeChartData[game.id] || [],
-                "score",
-                "Tiempo (min)",
-                getColor(category === 'Physical' ? 7 + index : 9 + index),
-                true
-              )
-            )}
+            {categoryGames.slice(1).map((game, index) => (
+              <React.Fragment key={game.id}>
+                {renderModernBarChart(
+                  `Tiempos: ${game.name}`,
+                  individualGameTimeChartData[game.id] || [],
+                  "score",
+                  "Tiempo (min)",
+                  getColor(category === 'Physical' ? 7 + index : 9 + index),
+                  true
+                )}
+              </React.Fragment>
+            ))}
           </div>
         }
          {category === 'Extra' && (
