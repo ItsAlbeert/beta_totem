@@ -111,7 +111,7 @@ export default function TimesPage() {
         extraGameDetailedStatuses: defaultExtraStatuses,
       });
     }
-  }, [editMode, scoreToEdit, games, form.reset]);
+  }, [editMode, scoreToEdit, games]);
 
 
   const addScoreMutation = useMutation({
