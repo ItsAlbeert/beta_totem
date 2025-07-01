@@ -14,12 +14,11 @@ import {
   ChartLegend,
   ChartLegendContent,
 } from "@/components/ui/chart";
-import type { ChartConfig, Participant, Score, Game, MultiMetricDataPoint, ScoringSettings } from "@/types";
+import type { ChartConfig, Participant, Game, MultiMetricDataPoint, LeaderboardEntry } from "@/types";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { getParticipants, getScores, getGames, getScoringSettings } from "@/lib/firestore-services";
-import { calculateAllParticipantScores } from "@/lib/data-utils"; 
+import { getParticipants, getGames, getCalculatedLeaderboardData } from "@/lib/firestore-services";
 
 const chartColors = [
   "hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))",
@@ -27,16 +26,6 @@ const chartColors = [
 ];
 
 const getColor = (index: number) => chartColors[index % chartColors.length];
-
-interface ProcessedPageData {
-  participants: Participant[];
-  allScores: Score[]; 
-  games: Game[];
-  participantsMap: Map<string, Participant>;
-  gamesMap: Map<string, Game>;
-  leaderboardData: MultiMetricDataPoint[];
-  scoringSettings: ScoringSettings;
-}
 
 export default function ComparisonsPage() {
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([]);
@@ -47,9 +36,9 @@ export default function ComparisonsPage() {
     queryFn: getParticipants,
   });
 
-  const { data: allScores = [], isLoading: isLoadingScores, error: errorScores } = useQuery<Score[]>({
-    queryKey: ["scores"], 
-    queryFn: getScores,
+  const { data: leaderboardData = [], isLoading: isLoadingLeaderboard, error: errorLeaderboard } = useQuery<LeaderboardEntry[]>({
+    queryKey: ["leaderboardData"],
+    queryFn: getCalculatedLeaderboardData,
   });
 
   const { data: games = [], isLoading: isLoadingGames, error: errorGames } = useQuery<Game[]>({
@@ -57,24 +46,10 @@ export default function ComparisonsPage() {
     queryFn: getGames,
   });
 
-  const { data: scoringSettings, isLoading: isLoadingSettings, error: errorSettings } = useQuery<ScoringSettings>({
-    queryKey: ["scoringSettings"],
-    queryFn: getScoringSettings,
-  });
+  const isLoadingOverall = isLoadingParticipants || isLoadingLeaderboard || isLoadingGames;
+  const overallError = errorParticipants || errorLeaderboard || errorGames;
 
-  const isLoadingOverall = isLoadingParticipants || isLoadingScores || isLoadingGames || isLoadingSettings;
-  const overallError = errorParticipants || errorScores || errorGames || errorSettings;
-
-  const processedData = useMemo((): ProcessedPageData | null => {
-    if (isLoadingOverall || overallError || !participants.length || !allScores.length || !games.length || !scoringSettings) return null;
-
-    const participantsMap = new Map(participants.map(p => [p.id, p]));
-    const gamesMap = new Map(games.map(g => [g.id, g]));
-    const leaderboardData = calculateAllParticipantScores(participants, allScores, games, scoringSettings);
-
-    return { participants, allScores, games, participantsMap, gamesMap, leaderboardData, scoringSettings };
-  }, [participants, allScores, games, scoringSettings, isLoadingOverall, overallError]);
-
+  const gamesMap = useMemo(() => new Map(games.map(g => [g.id, g])), [games]);
 
   const handleParticipantSelection = (participantId: string, checked: boolean) => {
     setSelectedParticipantIds(prev =>
@@ -89,18 +64,15 @@ export default function ComparisonsPage() {
   };
   
   const comparisonChart = useMemo(() => {
-    if (!processedData || selectedParticipantIds.length === 0 || selectedGameIds.length === 0) {
+    if (selectedParticipantIds.length === 0 || selectedGameIds.length === 0) {
       return { chartData: [], chartConfig: {} };
     }
-    
-    const { leaderboardData, gamesMap } = processedData;
 
     const selectedParticipantsData = leaderboardData.filter(entry => selectedParticipantIds.includes(entry.id));
 
     const selectedGames = selectedGameIds
-        .map(id => gamesMap.get(id))
-        .filter(Boolean)
-        .filter(game => game!.category === 'Physical' || game!.category === 'Mental') as Game[]; 
+      .map(id => gamesMap.get(id))
+      .filter((g): g is Game => !!g && (g.category === 'Physical' || g.category === 'Mental'));
 
     if (selectedParticipantsData.length === 0 || selectedGames.length === 0) {
       return { chartData: [], chartConfig: {} };
@@ -121,7 +93,7 @@ export default function ComparisonsPage() {
     });
 
     return { chartData, chartConfig };
-  }, [processedData, selectedParticipantIds, selectedGameIds]);
+  }, [leaderboardData, gamesMap, selectedParticipantIds, selectedGameIds]);
 
 
   if (overallError) {

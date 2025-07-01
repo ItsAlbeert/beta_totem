@@ -104,12 +104,8 @@ export default function CalculationsPage() {
     onSuccess: () => {
       toast({ title: "Configuración Guardada", description: "Las reglas de puntuación han sido actualizadas." });
       queryClient.invalidateQueries({ queryKey: ["scoringSettings"] });
-      // Invalidate all queries that depend on scoring settings
+      // Invalidate all queries that depend on scoring settings, especially the new cached leaderboard
       queryClient.invalidateQueries({ queryKey: ["leaderboardData"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboardData"] });
-      queryClient.invalidateQueries({ queryKey: ["trendsData"] });
-      queryClient.invalidateQueries({ queryKey: ["comparisonsData"] });
-      queryClient.invalidateQueries({ queryKey: ["calculationsData"] }); // Self invalidate
     },
     onError: (error) => {
       toast({ title: "Error al Guardar", description: (error as Error).message, variant: "destructive" });

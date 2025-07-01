@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useMemo, useId } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -15,11 +15,9 @@ import {
   AreaChart, Area, RadarChart, PolarGrid, PolarAngleAxis, Radar, PolarRadiusAxis
 } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getParticipants, getScores, getGames, getScoringSettings } from "@/lib/firestore-services";
-import { calculateAllParticipantScores } from "@/lib/data-utils";
+import { getParticipants, getGames, getCalculatedLeaderboardData } from "@/lib/firestore-services";
 import { TrendingUp, Trophy, Timer, Target, Activity, Users, Zap } from "lucide-react";
 
-// --- New Modern Components & Data Processing ---
 
 const modernChartColors = [
   "#8B5CF6", "#06B6D4", "#10B981", "#F59E0B", "#EF4444",
@@ -61,76 +59,52 @@ const StatCard = ({ icon: Icon, title, value, colorClass }: {
   </Card>
 );
 
-interface ProcessedPageData {
-  participants: Participant[];
-  allScores: Score[]; 
-  games: Game[];
-  leaderboardForLatestScores: LeaderboardEntry[]; 
-  participantsMap: Map<string, Participant>;
-  gamesMap: Map<string, Game>;
-  scoringSettings: ScoringSettings;
-}
-
 export default function TrendsPage() {
   const { data: participants = [], isLoading: isLoadingParticipants, error: errorParticipants } = useQuery<Participant[]>({
     queryKey: ["participants"],
     queryFn: getParticipants,
   });
 
-  const { data: allScores = [], isLoading: isLoadingScores, error: errorScores } = useQuery<Score[]>({
-    queryKey: ["scores"],
-    queryFn: getScores,
-  });
-
   const { data: games = [], isLoading: isLoadingGames, error: errorGames } = useQuery<Game[]>({
     queryKey: ["games"],
     queryFn: getGames,
   });
-
-  const { data: scoringSettings, isLoading: isLoadingSettings, error: errorSettings } = useQuery<ScoringSettings>({
-    queryKey: ["scoringSettings"],
-    queryFn: getScoringSettings,
+  
+  const { data: leaderboardForLatestScores = [], isLoading: isLoadingLeaderboard, error: errorLeaderboard } = useQuery<LeaderboardEntry[]>({
+    queryKey: ["leaderboardData"],
+    queryFn: getCalculatedLeaderboardData,
   });
 
-  const isLoadingOverall = isLoadingParticipants || isLoadingScores || isLoadingGames || isLoadingSettings;
-  const overallError = errorParticipants || errorScores || errorGames || errorSettings;
 
-  const processedData = useMemo((): ProcessedPageData | null => {
-    if (isLoadingOverall || overallError || !participants.length || !allScores.length || !games.length || !scoringSettings) return null;
+  const isLoadingOverall = isLoadingParticipants || isLoadingGames || isLoadingLeaderboard;
+  const overallError = errorParticipants || errorGames || errorLeaderboard;
 
-    const participantsMap = new Map(participants.map(p => [p.id, p]));
-    const gamesMap = new Map(games.map(g => [g.id, g]));
-    
-    const leaderboardForLatestScores = calculateAllParticipantScores(participants, allScores, games, scoringSettings);
-
-    return { participants, allScores, games, leaderboardForLatestScores, participantsMap, gamesMap, scoringSettings };
-  }, [participants, allScores, games, scoringSettings, isLoadingOverall, overallError]);
-
+  const participantsMap = useMemo(() => new Map(participants.map(p => [p.id, p])), [participants]);
+  
   const radarData = useMemo(() => {
-    if (!processedData) return [];
-    return processedData.leaderboardForLatestScores.slice(0, 5).map(entry => ({
-      subject: processedData.participantsMap.get(entry.id)?.name.split(' ')[0] || entry.id,
+    if (!leaderboardForLatestScores.length || !participants.length) return [];
+    return leaderboardForLatestScores.slice(0, 5).map(entry => ({
+      subject: participantsMap.get(entry.id)?.name.split(' ')[0] || entry.id,
       'P. Físico': entry.puntos_fisico || 0,
       'P. Mental': entry.puntos_mental || 0,
       'P. Extras': entry.puntos_extras || 0,
       fullMark: 100,
     }));
-  }, [processedData]);
+  }, [leaderboardForLatestScores, participantsMap, participants]);
 
   const progressAreaData = useMemo(() => {
-    if (!processedData) return [];
-    return processedData.leaderboardForLatestScores.map((entry, index) => ({
-      name: processedData.participantsMap.get(entry.id)?.name.split(' ')[0] || entry.id,
+    if (!leaderboardForLatestScores.length || !participants.length) return [];
+    return leaderboardForLatestScores.map((entry, index) => ({
+      name: participantsMap.get(entry.id)?.name.split(' ')[0] || entry.id,
       posicion: index + 1,
       'Puntos Físico': entry.puntos_fisico || 0,
       'Puntos Mental': entry.puntos_mental || 0,
       'Puntos Extra': entry.puntos_extras || 0,
     }));
-  }, [processedData]);
+  }, [leaderboardForLatestScores, participantsMap, participants]);
 
   const statsData = useMemo(() => {
-    if (!processedData) return null;
-    const { leaderboardForLatestScores } = processedData;
+    if (!leaderboardForLatestScores.length) return null;
     const totalParticipants = leaderboardForLatestScores.length;
     if (totalParticipants === 0) return { totalParticipants: 0, avgPhysical: '0', avgMental: '0', maxTotal: '0' };
     
@@ -144,11 +118,10 @@ export default function TrendsPage() {
       avgMental: avgMental.toFixed(1),
       maxTotal: maxTotal.toFixed(1)
     };
-  }, [processedData]);
+  }, [leaderboardForLatestScores]);
   
   const categoryPointsChartData = useMemo(() => {
-    if (!processedData) return { Physical: [], Mental: [], Extra: [] };
-    const { leaderboardForLatestScores, participantsMap } = processedData;
+    if (!leaderboardForLatestScores.length || !participants.length) return { Physical: [], Mental: [], Extra: [] };
     const result: { [key in GameCategory | string]: SingleMetricDataPoint[] } = { Physical: [], Mental: [], Extra: [] };
     leaderboardForLatestScores.forEach(entry => {
       const participantName = participantsMap.get(entry.id)?.name || entry.id;
@@ -160,13 +133,12 @@ export default function TrendsPage() {
         (result[cat as GameCategory] as SingleMetricDataPoint[]).sort((a, b) => (b.score ?? -Infinity) - (a.score ?? -Infinity)); 
     });
     return result;
-  }, [processedData]);
+  }, [leaderboardForLatestScores, participantsMap, participants]);
 
   const individualGameTimeChartData = useMemo(() => {
-    if (!processedData) return {};
-    const { games: allGamesList, leaderboardForLatestScores, participantsMap } = processedData;
+    if (!games.length || !leaderboardForLatestScores.length || !participants.length) return {};
     const result: { [gameId: string]: SingleMetricDataPoint[] } = {};
-    allGamesList.filter(game => game.category === 'Physical' || game.category === 'Mental').forEach(game => {
+    games.filter(game => game.category === 'Physical' || game.category === 'Mental').forEach(game => {
       result[game.id] = [];
       leaderboardForLatestScores.forEach(entry => {
         const gameTime = entry.gameTimes?.[game.id];
@@ -177,7 +149,7 @@ export default function TrendsPage() {
       result[game.id].sort((a, b) => (a.score ?? Infinity) - (b.score ?? Infinity)); 
     });
     return result;
-  }, [processedData]);
+  }, [games, leaderboardForLatestScores, participantsMap, participants]);
 
   const renderModernBarChart = (
     title: string, 
@@ -187,11 +159,12 @@ export default function TrendsPage() {
     color: string,
     lowerIsBetter: boolean = false
   ) => {
+    const uniqueId = useId(); 
     if (isLoadingOverall && data.length === 0) return <Skeleton className="h-[300px] w-full" />;
-    if (!isLoadingOverall && data.length === 0) return <div className="flex items-center justify-center h-[300px] text-muted-foreground">No hay datos</div>;
+    if (!isLoadingOverall && data.length === 0) return <div className="flex items-center justify-center h-[300px] text-muted-foreground">No hay datos disponibles</div>;
     
     const config: ChartConfig = { [dataKey]: { label: yAxisLabel, color } };
-    const gradientId = `gradient-${dataKey}-${Math.random().toString(36).substr(2, 9)}`;
+    const gradientId = `gradient-${dataKey}-${uniqueId}`;
 
     return (
       <Card className="shadow-lg hover:shadow-xl transition-all duration-300 h-full">
@@ -222,7 +195,7 @@ export default function TrendsPage() {
   };
   
   const renderCategorySection = (category: GameCategory, title: string, icon: React.ElementType, mainColor: string) => {
-    const categoryGames = processedData?.games.filter(g => g.category === category) || [];
+    const categoryGames = games.filter(g => g.category === category) || [];
     const mainChartData = categoryPointsChartData[category] || [];
     const isTimeBased = category === 'Physical' || category === 'Mental';
 
@@ -283,7 +256,7 @@ export default function TrendsPage() {
     return <p className="text-destructive text-center py-8">Error al cargar datos: {(overallError as Error).message}</p>;
   }
   
-  if (isLoadingOverall || !processedData) {
+  if (isLoadingOverall) {
      return (
        <>
         <PageHeader title="Análisis de Tendencias" description="Visualización avanzada del rendimiento."/>
@@ -298,6 +271,20 @@ export default function TrendsPage() {
         </div>
        </>
      )
+  }
+
+  if (!isLoadingOverall && leaderboardForLatestScores.length === 0) {
+    return (
+       <>
+        <PageHeader title="Análisis de Tendencias" description="Visualización avanzada del rendimiento."/>
+         <div className="flex flex-col items-center justify-center text-center py-16 px-6 rounded-xl bg-card border border-border">
+            <h3 className="text-xl font-semibold text-foreground">No hay datos para analizar</h3>
+            <p className="mt-2 text-muted-foreground">
+                Registra algunas puntuaciones para empezar a ver las tendencias y estadísticas.
+            </p>
+         </div>
+       </>
+    )
   }
 
   return (
@@ -368,13 +355,11 @@ export default function TrendsPage() {
           </Card>
         </div>
 
-        {processedData && (
-          <div className="space-y-12 mt-12">
-            {renderCategorySection('Physical', 'Rendimiento Físico', Timer, 'from-purple-500 to-pink-600')}
-            {renderCategorySection('Mental', 'Rendimiento Mental', Activity, 'from-blue-500 to-cyan-600')}
-            {renderCategorySection('Extra', 'Puntos Extra', Zap, 'from-green-500 to-emerald-600')}
-          </div>
-        )}
+        <div className="space-y-12 mt-12">
+          {renderCategorySection('Physical', 'Rendimiento Físico', Timer, 'from-purple-500 to-pink-600')}
+          {renderCategorySection('Mental', 'Rendimiento Mental', Activity, 'from-blue-500 to-cyan-600')}
+          {renderCategorySection('Extra', 'Puntos Extra', Zap, 'from-green-500 to-emerald-600')}
+        </div>
       </div>
     </>
   );

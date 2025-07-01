@@ -8,14 +8,13 @@ import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import type { LeaderboardEntry, Participant, Score, Game, GameCategory, ExtraGameStatusDetail, ExtraGameType, ScoringSettings } from "@/types";
+import type { LeaderboardEntry, Game, GameCategory, ExtraGameStatusDetail } from "@/types";
 import { ArrowDownUp, ChevronDown, ChevronRight, Edit3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { getParticipants, getScores, getGames, getScoringSettings } from "@/lib/firestore-services";
-import { calculateAllParticipantScores } from "@/lib/data-utils";
+import { getGames, getCalculatedLeaderboardData } from "@/lib/firestore-services";
 
 type SortableColumn = keyof Pick<LeaderboardEntry, 
   'rank' | 
@@ -33,14 +32,9 @@ export default function LeaderboardPage() {
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [expandedParticipantId, setExpandedParticipantId] = useState<string | null>(null);
 
-  const { data: participants = [], isLoading: isLoadingParticipants, error: errorParticipants } = useQuery<Participant[]>({
-    queryKey: ["participants"],
-    queryFn: getParticipants,
-  });
-
-  const { data: allScores = [], isLoading: isLoadingScores, error: errorScores } = useQuery<Score[]>({
-    queryKey: ["scores"],
-    queryFn: getScores,
+  const { data: calculatedData = [], isLoading: isLoadingData, error: errorData } = useQuery<LeaderboardEntry[]>({
+    queryKey: ["leaderboardData"],
+    queryFn: getCalculatedLeaderboardData,
   });
   
   const { data: games = [], isLoading: isLoadingGames, error: errorGames } = useQuery<Game[]>({
@@ -48,20 +42,15 @@ export default function LeaderboardPage() {
     queryFn: getGames,
   });
 
-  const { data: scoringSettings, isLoading: isLoadingSettings, error: errorSettings } = useQuery<ScoringSettings>({
-    queryKey: ["scoringSettings"],
-    queryFn: getScoringSettings,
-  });
-
-  const isLoadingOverall = isLoadingParticipants || isLoadingScores || isLoadingGames || isLoadingSettings;
-  const overallError = errorParticipants || errorScores || errorGames || errorSettings;
+  const isLoadingOverall = isLoadingData || isLoadingGames;
+  const overallError = errorData || errorGames;
 
   const gamesMap = useMemo(() => new Map(games.map(g => [g.id, g])), [games]);
 
   const applySort = useCallback((data: LeaderboardEntry[], column: SortableColumn, direction: SortDirection) => {
     if(data.length === 0) return data;
         
-    return [...data].sort((a, b) => {
+    const sortedData = [...data].sort((a, b) => {
       let valA = a[column];
       let valB = b[column];
 
@@ -72,18 +61,22 @@ export default function LeaderboardPage() {
       valA = (valA === undefined || valA === null ? (direction === 'asc' ? Infinity : -Infinity) : valA) as number;
       valB = (valB === undefined || valB === null ? (direction === 'asc' ? Infinity : -Infinity) : valB) as number;
       
-      if (column === 'rank') { 
-        return direction === 'asc' ? (valA as number) - (valB as number) : (valB as number) - (valA as number);
-      }
       return direction === 'asc' ? (valA as number) - (valB as number) : (valB as number) - (valA as number);
     });
+
+    if (column !== 'rank') {
+      return sortedData;
+    }
+    
+    // If sorting by rank, we respect the original rank from calculation
+    return direction === 'asc' ? data : [...data].reverse();
+
   }, []);
   
   const leaderboardData = useMemo(() => {
-    if (isLoadingOverall || overallError || !participants.length || !allScores.length || !games.length || !scoringSettings) return [];
-    const processed = calculateAllParticipantScores(participants, allScores, games, scoringSettings);
-    return applySort(processed, sortColumn, sortDirection);
-  }, [participants, allScores, games, scoringSettings, isLoadingOverall, overallError, sortColumn, sortDirection, applySort]);
+    if (!calculatedData) return [];
+    return applySort(calculatedData, sortColumn, sortDirection);
+  }, [calculatedData, sortColumn, sortDirection, applySort]);
 
 
   const handleSort = (column: SortableColumn) => {

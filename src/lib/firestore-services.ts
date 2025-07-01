@@ -19,7 +19,8 @@ import {
   setDoc, // Added setDoc for settings
 } from "firebase/firestore";
 import { db } from "./firebase";
-import type { Participant, Game, Score, ExtraGameStatusDetail, GameCategory, ExtraGameType, ScoringSettings } from "@/types";
+import type { Participant, Game, Score, ExtraGameStatusDetail, GameCategory, ExtraGameType, ScoringSettings, LeaderboardEntry } from "@/types";
+import { calculateAllParticipantScores } from "./data-utils";
 
 // --- Helper to convert Firestore doc to actual data with ID ---
 function mapDocToDataWithId<T>(docSnap: QueryDocumentSnapshot<DocumentData> | DocumentData): T {
@@ -117,18 +118,26 @@ const SCORES_COLLECTION = "scores";
 export async function getScores(): Promise<Score[]> {
   const q = query(collection(db, SCORES_COLLECTION), orderBy("recordedAt", "desc"));
   const snapshot = await getDocs(q);
-  return snapshot.docs.map(docSnapshot => {
+  
+  const scores: Score[] = [];
+  snapshot.forEach(docSnapshot => {
     const data = docSnapshot.data();
-    return {
-      id: docSnapshot.id,
-      participantId: data.participantId,
-      tiempo_fisico: data.tiempo_fisico ?? 0,
-      tiempo_mental: data.tiempo_mental ?? 0,
-      extraGameDetailedStatuses: data.extraGameDetailedStatuses || {}, 
-      gameTimes: data.gameTimes || {}, 
-      recordedAt: (data.recordedAt as Timestamp).toDate().toISOString(),
-    } as Score;
+    // Safely handle recordedAt
+    if (data.recordedAt && data.recordedAt.toDate) {
+      scores.push({
+        id: docSnapshot.id,
+        participantId: data.participantId,
+        tiempo_fisico: data.tiempo_fisico ?? 0,
+        tiempo_mental: data.tiempo_mental ?? 0,
+        extraGameDetailedStatuses: data.extraGameDetailedStatuses || {}, 
+        gameTimes: data.gameTimes || {}, 
+        recordedAt: data.recordedAt.toDate().toISOString(),
+      });
+    } else {
+        console.warn(`Skipping score with id ${docSnapshot.id} due to invalid 'recordedAt' field.`);
+    }
   });
+  return scores;
 }
 
 export async function getScoreById(scoreId: string): Promise<Score | null> {
@@ -136,15 +145,20 @@ export async function getScoreById(scoreId: string): Promise<Score | null> {
   const docSnap = await getDoc(scoreRef);
   if (docSnap.exists()) {
     const data = docSnap.data();
-    return {
-      id: docSnap.id,
-      participantId: data.participantId,
-      tiempo_fisico: data.tiempo_fisico ?? 0,
-      tiempo_mental: data.tiempo_mental ?? 0,
-      extraGameDetailedStatuses: data.extraGameDetailedStatuses || {},
-      gameTimes: data.gameTimes || {},
-      recordedAt: (data.recordedAt as Timestamp).toDate().toISOString(),
-    } as Score;
+    if (data.recordedAt && data.recordedAt.toDate) {
+      return {
+        id: docSnap.id,
+        participantId: data.participantId,
+        tiempo_fisico: data.tiempo_fisico ?? 0,
+        tiempo_mental: data.tiempo_mental ?? 0,
+        extraGameDetailedStatuses: data.extraGameDetailedStatuses || {},
+        gameTimes: data.gameTimes || {},
+        recordedAt: data.recordedAt.toDate().toISOString(),
+      } as Score;
+    } else {
+       console.error(`Score with ID ${scoreId} has an invalid 'recordedAt' field.`);
+       return null;
+    }
   } else {
     console.error(`No score found with ID: ${scoreId}`);
     return null;
@@ -210,18 +224,24 @@ export async function updateScore(
 export async function getRecentScores(count: number): Promise<Score[]> {
     const q = query(collection(db, SCORES_COLLECTION), orderBy("recordedAt", "desc"), limit(count));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(docSnapshot => {
+    const scores: Score[] = [];
+    snapshot.forEach(docSnapshot => {
         const data = docSnapshot.data();
-        return {
-          id: docSnapshot.id,
-          participantId: data.participantId,
-          tiempo_fisico: data.tiempo_fisico ?? 0,
-          tiempo_mental: data.tiempo_mental ?? 0,
-          extraGameDetailedStatuses: data.extraGameDetailedStatuses || {},
-          gameTimes: data.gameTimes || {},
-          recordedAt: (data.recordedAt as Timestamp).toDate().toISOString(),
-        } as Score;
+        if (data.recordedAt && data.recordedAt.toDate) {
+            scores.push({
+              id: docSnapshot.id,
+              participantId: data.participantId,
+              tiempo_fisico: data.tiempo_fisico ?? 0,
+              tiempo_mental: data.tiempo_mental ?? 0,
+              extraGameDetailedStatuses: data.extraGameDetailedStatuses || {},
+              gameTimes: data.gameTimes || {},
+              recordedAt: data.recordedAt.toDate().toISOString(),
+            });
+        } else {
+             console.warn(`Skipping recent score with id ${docSnapshot.id} due to invalid 'recordedAt' field.`);
+        }
     });
+    return scores;
 }
 
 // --- Scoring Settings ---
@@ -276,3 +296,33 @@ export async function updateScoringSettings(settings: Omit<ScoringSettings, 'id'
   await setDoc(docRef, settings, { merge: true }); // Use setDoc with merge to create or overwrite
 }
     
+// --- Performance Optimization: Cached Leaderboard Calculation ---
+
+export async function getCalculatedLeaderboardData(): Promise<LeaderboardEntry[]> {
+  try {
+    const [participants, allScores, games, scoringSettings] = await Promise.all([
+      getParticipants(),
+      getScores(),
+      getGames(),
+      getScoringSettings(),
+    ]);
+
+    // Handle case where essential data might be missing
+    if (!participants || !allScores || !games || !scoringSettings) {
+      console.warn("Missing essential data for leaderboard calculation.");
+      return [];
+    }
+    
+    // Return empty array if there are no participants or scores to process
+    if (participants.length === 0 || allScores.length === 0) {
+        return [];
+    }
+
+    const leaderboardData = calculateAllParticipantScores(participants, allScores, games, scoringSettings);
+    return leaderboardData;
+  } catch (error) {
+    console.error("Error calculating leaderboard data:", error);
+    // Return an empty array or re-throw the error, depending on desired error handling
+    return [];
+  }
+}

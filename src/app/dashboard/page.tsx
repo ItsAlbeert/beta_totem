@@ -1,46 +1,20 @@
+
 "use client"
 
-import React, { useMemo } from "react"
+import React, { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
-
-import type { Participant, Score, Game, LeaderboardEntry, ScoringSettings } from "@/types"
-import { getParticipants, getGames, getScores, getScoringSettings } from "@/lib/firestore-services"
-import { calculateAllParticipantScores } from "@/lib/data-utils"
+import type { LeaderboardEntry } from "@/types"
+import { getCalculatedLeaderboardData } from "@/lib/firestore-services"
 import ParticipantCard from "@/components/dashboard/participant-card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { PageHeader } from "@/components/page-header"
 
 const DashboardPage = () => {
-  const { data: participants = [], isLoading: isLoadingParticipants } = useQuery<Participant[]>({
-    queryKey: ["participants"],
-    queryFn: getParticipants,
+  const { data: leaderboardData = [], isLoading } = useQuery<LeaderboardEntry[]>({
+    queryKey: ["leaderboardData"],
+    queryFn: getCalculatedLeaderboardData,
   });
 
-  const { data: games = [], isLoading: isLoadingGames } = useQuery<Game[]>({
-    queryKey: ["games"],
-    queryFn: getGames,
-  });
-
-  const { data: allScores = [], isLoading: isLoadingScores } = useQuery<Score[]>({
-    queryKey: ["scores"],
-    queryFn: getScores,
-  });
-  
-  const { data: scoringSettings, isLoading: isLoadingSettings } = useQuery<ScoringSettings>({
-    queryKey: ["scoringSettings"],
-    queryFn: getScoringSettings,
-  });
-
-  const isLoading = isLoadingParticipants || isLoadingGames || isLoadingScores || isLoadingSettings;
-
-  const leaderboardData = useMemo((): LeaderboardEntry[] => {
-    if (isLoading || !participants.length || !games.length || !allScores.length || !scoringSettings) {
-      return [];
-    }
-    const calculated = calculateAllParticipantScores(participants, allScores, games, scoringSettings);
-    return calculated.sort((a, b) => a.rank - b.rank);
-  }, [participants, games, allScores, scoringSettings, isLoading]);
-  
   return (
     <>
       <PageHeader
@@ -51,7 +25,7 @@ const DashboardPage = () => {
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {[...Array(8)].map((_, i) => (
-            <Skeleton key={i} className="h-[160px] rounded-xl" />
+            <Skeleton key={i} className="h-[300px] rounded-xl" />
           ))}
         </div>
       ) : (
