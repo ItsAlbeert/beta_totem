@@ -56,6 +56,8 @@ export default function LeaderboardPage() {
   const isLoadingOverall = isLoadingParticipants || isLoadingScores || isLoadingGames || isLoadingSettings;
   const overallError = errorParticipants || errorScores || errorGames || errorSettings;
 
+  const gamesMap = useMemo(() => new Map(games.map(g => [g.id, g])), [games]);
+
   const applySort = useCallback((data: LeaderboardEntry[], column: SortableColumn, direction: SortDirection) => {
     if(data.length === 0) return data;
         
@@ -258,7 +260,7 @@ export default function LeaderboardPage() {
                                 {(['Physical', 'Mental'] as GameCategory[]).map(category => {
                                   const categoryGamesTimes = Object.entries(entry.gameTimes || {})
                                     .map(([gameId, time]) => {
-                                      const gameDetails = games.find(g => g.id === gameId);
+                                      const gameDetails = gamesMap.get(gameId);
                                       if (gameDetails && gameDetails.category === category && typeof time === 'number') {
                                         return { name: gameDetails.name, time };
                                       }
