@@ -1,8 +1,6 @@
-
 "use client"
 
 import React, { useState, useMemo } from "react"
-import type { Metadata } from "next"
 import { useQuery } from "@tanstack/react-query"
 
 import type { Participant, Score, Game, LeaderboardEntry, ScoringSettings } from "@/types"
@@ -10,11 +8,6 @@ import { getParticipants, getGames, getScores, getScoringSettings } from "@/lib/
 import { calculateAllParticipantScores } from "@/lib/data-utils"
 import ParticipantCard from "@/components/dashboard/participant-card"
 import { Skeleton } from "@/components/ui/skeleton"
-
-export const metadata: Metadata = {
-  title: "Dashboard",
-  description: "Visualización del rendimiento de los participantes.",
-}
 
 const DashboardPage = () => {
   const { data: participants = [], isLoading: isLoadingParticipants } = useQuery<Participant[]>({
