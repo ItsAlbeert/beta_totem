@@ -4,7 +4,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import React, { useEffect, useState } from "react"; // Ensured React is imported
+import React, { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -25,7 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"; // Added CardDescription
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 import { useToast } from "@/hooks/use-toast";
 import type { Participant, Score, Game, GameCategory, ExtraGameStatusDetail } from "@/types";
@@ -56,8 +56,6 @@ export default function TimesPage() {
 
   const [editMode, setEditMode] = useState(false);
   const [editingScoreId, setEditingScoreId] = useState<string | null>(null);
-  const [editingParticipantId, setEditingParticipantId] = useState<string | null>(null);
-
 
   const { data: participants = [], isLoading: isLoadingParticipants, error: errorParticipants } = useQuery<Participant[]>({
     queryKey: ["participants"],
@@ -80,54 +78,46 @@ export default function TimesPage() {
     },
   });
   
-  // Effect for handling edit mode from URL
-  useEffect(() => {
-    const scoreIdFromParams = searchParams.get('edit_score_id');
-    const participantIdFromParams = searchParams.get('participant_id');
+  const scoreIdFromParams = searchParams.get('edit_score_id');
 
-    if (scoreIdFromParams && participantIdFromParams) {
-      setEditMode(true);
-      setEditingScoreId(scoreIdFromParams);
-      setEditingParticipantId(participantIdFromParams);
-      form.setValue('participantId', participantIdFromParams); // Set participantId for the form
-    } else {
-      setEditMode(false);
-      setEditingScoreId(null);
-      setEditingParticipantId(null);
-    }
-  }, [searchParams, form]);
-
-  // Effect to fetch and pre-fill form if in edit mode
   const { data: scoreToEdit, isLoading: isLoadingScoreToEdit, isError: isErrorScoreToEdit } = useQuery({
-    queryKey: ['scoreToEdit', editingScoreId],
-    queryFn: () => editingScoreId ? getScoreById(editingScoreId) : Promise.resolve(null),
-    enabled: !!editingScoreId, 
+    queryKey: ['scoreToEdit', scoreIdFromParams],
+    queryFn: () => scoreIdFromParams ? getScoreById(scoreIdFromParams) : Promise.resolve(null),
+    enabled: !!scoreIdFromParams, 
   });
 
   useEffect(() => {
-    if (editMode && scoreToEdit) {
-      form.reset({
-        participantId: scoreToEdit.participantId, // This should match editingParticipantId
-        tiempo_fisico: scoreToEdit.tiempo_fisico,
-        tiempo_mental: scoreToEdit.tiempo_mental,
-        gameTimes: scoreToEdit.gameTimes || {},
-        extraGameDetailedStatuses: scoreToEdit.extraGameDetailedStatuses || {},
+    const isEdit = !!scoreIdFromParams;
+    setEditMode(isEdit);
+    setEditingScoreId(scoreIdFromParams);
+
+    const defaultExtraStatuses: { [key: string]: ExtraGameStatusDetail } = {};
+    if (games) {
+      games.filter(g => g.category === 'Extra').forEach(g => {
+        defaultExtraStatuses[g.id] = 'no_hecho';
       });
-    } else if (!editMode) {
-      // Reset to default extra statuses when not in edit mode or games change
-       const defaultExtraStatuses: { [key: string]: ExtraGameStatusDetail } = {};
-        games.filter(g => g.category === 'Extra').forEach(g => {
-            defaultExtraStatuses[g.id] = 'no_hecho';
-        });
-        form.reset({ // Reset form but keep participantId if it was selected
-            participantId: form.getValues('participantId'),
-            tiempo_fisico: 0,
-            tiempo_mental: 0,
-            gameTimes: {},
-            extraGameDetailedStatuses: defaultExtraStatuses,
-        });
     }
-  }, [editMode, scoreToEdit, form, games]);
+
+    if (isEdit) {
+      if (scoreToEdit) {
+        form.reset({
+          participantId: scoreToEdit.participantId,
+          tiempo_fisico: scoreToEdit.tiempo_fisico,
+          tiempo_mental: scoreToEdit.tiempo_mental,
+          gameTimes: scoreToEdit.gameTimes || {},
+          extraGameDetailedStatuses: { ...defaultExtraStatuses, ...(scoreToEdit.extraGameDetailedStatuses || {}) },
+        });
+      }
+    } else {
+      form.reset({
+        participantId: "",
+        tiempo_fisico: 0,
+        tiempo_mental: 0,
+        gameTimes: {},
+        extraGameDetailedStatuses: defaultExtraStatuses,
+      });
+    }
+  }, [scoreIdFromParams, scoreToEdit, games]);
 
 
   const addScoreMutation = useMutation({
@@ -171,7 +161,6 @@ export default function TimesPage() {
 
   const updateScoreMutation = useMutation({
     mutationFn: (data: { scoreId: string; values: TimeInputFormValues }) => {
-        // Ensure participantId is not part of the data sent for update to Firestore, as it's fixed.
         const { participantId, ...updatableValues } = data.values;
         return updateScore(data.scoreId, updatableValues as Pick<Score, 'tiempo_fisico' | 'tiempo_mental' | 'gameTimes' | 'extraGameDetailedStatuses'>);
     },
@@ -200,29 +189,6 @@ export default function TimesPage() {
         });
     },
   });
-
-
-  React.useEffect(() => {
-    if (games.length > 0 && !editMode) { // Only set defaults if not in edit mode and games are loaded
-      const initialExtraStatuses: { [key: string]: ExtraGameStatusDetail } = {};
-      games.filter(g => g.category === 'Extra').forEach(g => {
-        initialExtraStatuses[g.id] = 'no_hecho'; 
-      });
-      
-      const currentExtraStatuses = form.getValues('extraGameDetailedStatuses');
-      const hasUserSetExtraStatus = currentExtraStatuses && Object.values(currentExtraStatuses).some(status => status !== 'no_hecho');
-
-      if (!hasUserSetExtraStatus || !currentExtraStatuses || Object.keys(currentExtraStatuses).length === 0) {
-         form.reset((currentValues) => ({
-           ...currentValues,
-           extraGameDetailedStatuses: initialExtraStatuses,
-         }));
-      } else {
-        const updatedStatuses = { ...initialExtraStatuses, ...currentExtraStatuses };
-        form.setValue('extraGameDetailedStatuses', updatedStatuses);
-      }
-    }
-  }, [games, form, editMode]);
 
 
   async function onSubmit(values: TimeInputFormValues) {
@@ -350,6 +316,7 @@ export default function TimesPage() {
     );
   };
 
+  const participantBeingEdited = editMode && scoreToEdit && participants.find(p => p.id === scoreToEdit.participantId);
 
   return (
     <>
@@ -360,9 +327,9 @@ export default function TimesPage() {
       <Card className="max-w-2xl mx-auto shadow-lg hover:shadow-xl transition-shadow duration-300">
         <CardHeader>
           <CardTitle>{editMode ? "Actualizar Entrada de Puntuación" : "Nueva Entrada de Puntuación"}</CardTitle>
-          {editMode && scoreToEdit && participants.find(p => p.id === scoreToEdit.participantId) && (
+          {editMode && scoreToEdit && participantBeingEdited && (
             <CardDescription>
-                Editando la puntuación de: <strong>{participants.find(p => p.id === scoreToEdit.participantId)?.name}</strong> registrada el {new Date(scoreToEdit.recordedAt).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}.
+                Editando la puntuación de: <strong>{participantBeingEdited.name}</strong> registrada el {new Date(scoreToEdit.recordedAt).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}.
             </CardDescription>
           )}
         </CardHeader>
@@ -471,5 +438,3 @@ export default function TimesPage() {
     </>
   );
 }
-
-    
