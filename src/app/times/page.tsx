@@ -108,7 +108,7 @@ export default function TimesPage() {
   
   useEffect(() => {
     form.reset(defaultValues);
-  }, [defaultValues, form]);
+  }, [defaultValues]);
 
 
   const addScoreMutation = useMutation({
