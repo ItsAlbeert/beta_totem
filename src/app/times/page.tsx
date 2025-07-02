@@ -4,7 +4,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import {
@@ -66,50 +66,49 @@ export default function TimesPage() {
     queryKey: ["games"],
     queryFn: getGames,
   });
-
-  const form = useForm<TimeInputFormValues>({
-    resolver: zodResolver(timeInputSchema),
-    defaultValues: {
-      participantId: "",
-      tiempo_fisico: 0,
-      tiempo_mental: 0,
-      gameTimes: {},
-      extraGameDetailedStatuses: {},
-    },
-  });
   
   const { data: scoreToEdit, isLoading: isLoadingScoreToEdit, isError: isErrorScoreToEdit } = useQuery({
-    queryKey: ['scoreToEdit', scoreIdFromParams],
-    queryFn: () => scoreIdFromParams ? getScoreById(scoreIdFromParams) : Promise.resolve(null),
-    enabled: !!scoreIdFromParams, 
+    queryKey: ['scoreToEdit', editingScoreId],
+    queryFn: () => editingScoreId ? getScoreById(editingScoreId) : Promise.resolve(null),
+    enabled: editMode, 
   });
 
-  useEffect(() => {
+  const defaultValues = useMemo(() => {
     const defaultExtraStatuses: { [key: string]: ExtraGameStatusDetail } = {};
     if (games) {
-      games.filter(g => g.category === 'Extra').forEach(g => {
-        defaultExtraStatuses[g.id] = 'no_hecho';
-      });
+        games.filter(g => g.category === 'Extra').forEach(g => {
+            defaultExtraStatuses[g.id] = 'no_hecho';
+        });
     }
 
     if (editMode && scoreToEdit) {
-      form.reset({
-        participantId: scoreToEdit.participantId,
-        tiempo_fisico: scoreToEdit.tiempo_fisico,
-        tiempo_mental: scoreToEdit.tiempo_mental,
-        gameTimes: scoreToEdit.gameTimes || {},
-        extraGameDetailedStatuses: { ...defaultExtraStatuses, ...(scoreToEdit.extraGameDetailedStatuses || {}) },
-      });
-    } else if (!editMode) {
-      form.reset({
-        participantId: "",
-        tiempo_fisico: 0,
-        tiempo_mental: 0,
-        gameTimes: {},
-        extraGameDetailedStatuses: defaultExtraStatuses,
-      });
+        return {
+            participantId: scoreToEdit.participantId,
+            tiempo_fisico: scoreToEdit.tiempo_fisico,
+            tiempo_mental: scoreToEdit.tiempo_mental,
+            gameTimes: scoreToEdit.gameTimes || {},
+            extraGameDetailedStatuses: { ...defaultExtraStatuses, ...(scoreToEdit.extraGameDetailedStatuses || {}) },
+        };
+    } else {
+        return {
+            participantId: "",
+            tiempo_fisico: 0,
+            tiempo_mental: 0,
+            gameTimes: {},
+            extraGameDetailedStatuses: defaultExtraStatuses,
+        };
     }
-  }, [editMode, scoreToEdit, games, form]);
+  }, [editMode, scoreToEdit, games]);
+
+
+  const form = useForm<TimeInputFormValues>({
+    resolver: zodResolver(timeInputSchema),
+    defaultValues: defaultValues, 
+  });
+  
+  useEffect(() => {
+    form.reset(defaultValues);
+  }, [defaultValues, form]);
 
 
   const addScoreMutation = useMutation({
