@@ -59,6 +59,59 @@ const StatCard = ({ icon: Icon, title, value, colorClass }: {
   </Card>
 );
 
+const ModernBarChart = ({
+  title,
+  data,
+  dataKey = "score",
+  yAxisLabel = "Puntos",
+  color,
+  lowerIsBetter = false,
+  isLoading,
+}: {
+  title: string;
+  data: SingleMetricDataPoint[];
+  dataKey?: string;
+  yAxisLabel?: string;
+  color: string;
+  lowerIsBetter?: boolean;
+  isLoading: boolean;
+}) => {
+  const uniqueId = useId();
+  if (isLoading && data.length === 0) return <Skeleton className="h-[300px] w-full" />;
+  if (!isLoading && data.length === 0) return <div className="flex items-center justify-center h-[300px] text-muted-foreground">No hay datos disponibles</div>;
+
+  const config: ChartConfig = { [dataKey]: { label: yAxisLabel, color } };
+  const gradientId = `gradient-${dataKey}-${uniqueId}`;
+
+  return (
+    <Card className="shadow-lg hover:shadow-xl transition-all duration-300 h-full">
+      <CardHeader>
+        <CardTitle className="text-lg">{title}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ChartContainer config={config} className="h-[250px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} layout="vertical" margin={{ left: 10, right: 30, top: 5, bottom: 20 }}>
+              <defs>
+                <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={color} stopOpacity={0.9}/>
+                  <stop offset="95%" stopColor={color} stopOpacity={0.6}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <XAxis type="number" stroke="hsl(var(--muted-foreground))" domain={lowerIsBetter ? ['dataMin', 'auto'] : [0, 'auto']} />
+              <YAxis dataKey="name" type="category" stroke="hsl(var(--muted-foreground))" width={80} tickFormatter={(value) => value.length > 10 ? `${value.substring(0,8)}...` : value} />
+              <ChartTooltip cursor={{ fill: 'hsl(var(--accent)/0.5)' }} content={<ModernTooltip />} />
+              <Bar dataKey={dataKey} fill={`url(#${gradientId})`} radius={[0, 6, 6, 0]} barSize={15} />
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartContainer>
+      </CardContent>
+    </Card>
+  );
+};
+
+
 export default function TrendsPage() {
   const { data: participants = [], isLoading: isLoadingParticipants, error: errorParticipants } = useQuery<Participant[]>({
     queryKey: ["participants"],
@@ -151,49 +204,6 @@ export default function TrendsPage() {
     return result;
   }, [games, leaderboardForLatestScores, participantsMap, participants]);
 
-  const renderModernBarChart = (
-    title: string, 
-    data: SingleMetricDataPoint[], 
-    dataKey: string = "score", 
-    yAxisLabel: string = "Puntos", 
-    color: string,
-    lowerIsBetter: boolean = false
-  ) => {
-    const uniqueId = useId(); 
-    if (isLoadingOverall && data.length === 0) return <Skeleton className="h-[300px] w-full" />;
-    if (!isLoadingOverall && data.length === 0) return <div className="flex items-center justify-center h-[300px] text-muted-foreground">No hay datos disponibles</div>;
-    
-    const config: ChartConfig = { [dataKey]: { label: yAxisLabel, color } };
-    const gradientId = `gradient-${dataKey}-${uniqueId}`;
-
-    return (
-      <Card className="shadow-lg hover:shadow-xl transition-all duration-300 h-full">
-        <CardHeader>
-          <CardTitle className="text-lg">{title}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ChartContainer config={config} className="h-[250px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data} layout="vertical" margin={{ left: 10, right: 30, top: 5, bottom: 20 }}>
-                <defs>
-                  <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={color} stopOpacity={0.9}/>
-                    <stop offset="95%" stopColor={color} stopOpacity={0.6}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis type="number" stroke="hsl(var(--muted-foreground))" domain={lowerIsBetter ? ['dataMin', 'auto'] : [0, 'auto']} />
-                <YAxis dataKey="name" type="category" stroke="hsl(var(--muted-foreground))" width={80} tickFormatter={(value) => value.length > 10 ? `${value.substring(0,8)}...` : value} />
-                <ChartTooltip cursor={{ fill: 'hsl(var(--accent)/0.5)' }} content={<ModernTooltip />} />
-                <Bar dataKey={dataKey} fill={`url(#${gradientId})`} radius={[0, 6, 6, 0]} barSize={15} />
-              </BarChart>
-            </ResponsiveContainer>
-          </ChartContainer>
-        </CardContent>
-      </Card>
-    );
-  };
-  
   const renderCategorySection = (category: GameCategory, title: string, icon: React.ElementType, mainColor: string) => {
     const categoryGames = games.filter(g => g.category === category) || [];
     const mainChartData = categoryPointsChartData[category] || [];
@@ -209,39 +219,38 @@ export default function TrendsPage() {
         </div>
         
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-          {renderModernBarChart(
-            `Puntos Generales ${category === 'Physical' ? 'Físicos (Pғ)' : category === 'Mental' ? 'Mentales (Pᴍ)' : 'Extra (Pᴇ)'}`,
-            mainChartData,
-            "score",
-            "Puntos",
-            getColor(category === 'Physical' ? 0 : category === 'Mental' ? 1 : 2)
-          )}
+          <ModernBarChart
+            title={`Puntos Generales ${category === 'Physical' ? 'Físicos (Pғ)' : category === 'Mental' ? 'Mentales (Pᴍ)' : 'Extra (Pᴇ)'}`}
+            data={mainChartData}
+            yAxisLabel="Puntos"
+            color={getColor(category === 'Physical' ? 0 : category === 'Mental' ? 1 : 2)}
+            isLoading={isLoadingOverall}
+          />
 
           {isTimeBased && categoryGames.length > 0 && 
-            renderModernBarChart(
-              `Mejores Tiempos: ${categoryGames[0].name}`,
-              individualGameTimeChartData[categoryGames[0].id] || [],
-              "score",
-              "Tiempo (min)",
-              getColor(category === 'Physical' ? 5 : 6),
-              true
-            )
+            <ModernBarChart
+                title={`Mejores Tiempos: ${categoryGames[0].name}`}
+                data={individualGameTimeChartData[categoryGames[0].id] || []}
+                yAxisLabel="Tiempo (min)"
+                color={getColor(category === 'Physical' ? 5 : 6)}
+                lowerIsBetter={true}
+                isLoading={isLoadingOverall}
+            />
           }
         </div>
         
         {isTimeBased && categoryGames.length > 1 &&
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
             {categoryGames.slice(1).map((game, index) => (
-              <React.Fragment key={game.id}>
-                {renderModernBarChart(
-                  `Tiempos: ${game.name}`,
-                  individualGameTimeChartData[game.id] || [],
-                  "score",
-                  "Tiempo (min)",
-                  getColor(category === 'Physical' ? 7 + index : 9 + index),
-                  true
-                )}
-              </React.Fragment>
+                <ModernBarChart
+                  key={game.id}
+                  title={`Tiempos: ${game.name}`}
+                  data={individualGameTimeChartData[game.id] || []}
+                  yAxisLabel="Tiempo (min)"
+                  color={getColor(category === 'Physical' ? 7 + index : 9 + index)}
+                  lowerIsBetter={true}
+                  isLoading={isLoadingOverall}
+                />
             ))}
           </div>
         }
@@ -366,3 +375,4 @@ export default function TrendsPage() {
     </>
   );
 }
+
