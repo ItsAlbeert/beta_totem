@@ -35,7 +35,7 @@ const MvpParticipantRow = ({ participant, value, rank, unit }: { participant: Le
         </Avatar>
         <div>
             <p className="font-medium text-foreground">{participant.name}</p>
-            <p className="text-xs text-muted-foreground">Año {participant.year}</p>
+            <p className="text-xs text-muted-foreground">Año {participant.year} - {participant.gender}</p>
         </div>
     </div>
     <div className="text-right">

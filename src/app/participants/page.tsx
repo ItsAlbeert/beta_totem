@@ -10,11 +10,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import type { Participant } from "@/types";
+import type { Participant, Gender } from "@/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { Trash2 } from "lucide-react";
 import { getParticipants, addParticipant, deleteParticipant } from "@/lib/firestore-services";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function ParticipantsPage() {
   const queryClient = useQueryClient();
@@ -23,6 +24,7 @@ export default function ParticipantsPage() {
   const [newName, setNewName] = useState("");
   const [newYear, setNewYear] = useState<1 | 2 | 3 | "">(1);
   const [newPhoto, setNewPhoto] = useState<File | null>(null);
+  const [newGender, setNewGender] = useState<Gender>("Hombre");
 
   const { data: participants = [], isLoading: isLoadingParticipants, error: errorParticipants } = useQuery<Participant[]>({
     queryKey: ["participants"],
@@ -39,6 +41,7 @@ export default function ParticipantsPage() {
       });
       setNewName("");
       setNewYear(1);
+      setNewGender("Hombre");
       setNewPhoto(null);
       const fileInput = document.getElementById('photo') as HTMLInputElement;
       if (fileInput) fileInput.value = "";
@@ -80,10 +83,10 @@ export default function ParticipantsPage() {
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
-    if (!newName || !newYear) {
+    if (!newName || !newYear || !newGender) {
       toast({
         title: "Error",
-        description: "Nombre y año son obligatorios.",
+        description: "Nombre, año y género son obligatorios.",
         variant: "destructive",
       });
       return;
@@ -102,6 +105,7 @@ export default function ParticipantsPage() {
     const participantData: Omit<Participant, 'id' | 'photoUrl'> & { photoUrl?: string } = {
       name: newName,
       year: numericYear as 1 | 2 | 3,
+      gender: newGender,
     };
     
     const processAddition = (photoDataUrl?: string) => {
@@ -190,6 +194,22 @@ export default function ParticipantsPage() {
               />
             </div>
             <div className="grid w-full max-w-sm items-center gap-1.5">
+              <Label htmlFor="gender">Género</Label>
+              <Select 
+                value={newGender} 
+                onValueChange={(value) => setNewGender(value as Gender)}
+                disabled={addParticipantMutation.isPending}
+              >
+                <SelectTrigger id="gender">
+                  <SelectValue placeholder="Seleccionar género" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Hombre">Hombre</SelectItem>
+                  <SelectItem value="Mujer">Mujer</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid w-full max-w-sm items-center gap-1.5">
               <Label htmlFor="photo">Foto</Label>
               <Input
                 type="file"
@@ -234,6 +254,7 @@ export default function ParticipantsPage() {
                   <TableHead className="w-[80px]">Foto</TableHead>
                   <TableHead>Nombre</TableHead>
                   <TableHead>Año</TableHead>
+                  <TableHead>Género</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
@@ -248,6 +269,7 @@ export default function ParticipantsPage() {
                     </TableCell>
                     <TableCell className="font-medium">{participant.name}</TableCell>
                     <TableCell>{participant.year}</TableCell>
+                    <TableCell>{participant.gender}</TableCell>
                     <TableCell className="text-right">
                       <Button
                         variant="destructive"

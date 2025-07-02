@@ -19,7 +19,8 @@ import { getGames, getCalculatedLeaderboardData } from "@/lib/firestore-services
 type SortableColumn = keyof Pick<LeaderboardEntry, 
   'rank' | 
   'name' | 
-  'year' | 
+  'year' |
+  'gender' |
   'puntos_fisico' | 
   'puntos_mental' | 
   'puntos_extras' | 
@@ -54,7 +55,7 @@ export default function LeaderboardPage() {
       let valA = a[column];
       let valB = b[column];
 
-      if (column === 'name') {
+      if (column === 'name' || column === 'gender') {
         return direction === 'asc' ? (valA as string).localeCompare(valB as string) : (valB as string).localeCompare(valA as string);
       }
       
@@ -84,7 +85,7 @@ export default function LeaderboardPage() {
     if (sortColumn === column) {
       newDirection = sortDirection === 'asc' ? 'desc' : 'asc';
     } else {
-      if (column === 'rank' || column === 'name' || column === 'year') {
+      if (column === 'rank' || column === 'name' || column === 'year' || column === 'gender') {
         newDirection = 'asc';
       } else { 
         newDirection = 'desc'; // Higher points are better, so default to desc for point columns
@@ -164,6 +165,9 @@ export default function LeaderboardPage() {
                   <TableHead className="text-center">
                     <SortableButton column="year">Año</SortableButton>
                   </TableHead>
+                  <TableHead className="text-center">
+                    <SortableButton column="gender">Género</SortableButton>
+                  </TableHead>
                   <TableHead className="text-right">
                     <SortableButton column="puntos_fisico">P<sub>Físico</sub></SortableButton>
                   </TableHead>
@@ -197,6 +201,7 @@ export default function LeaderboardPage() {
                       </TableCell>
                       <TableCell className="font-medium">{entry.name}</TableCell>
                       <TableCell className="text-center">{entry.year}</TableCell>
+                      <TableCell className="text-center">{entry.gender}</TableCell>
                       <TableCell className="text-right">{entry.puntos_fisico.toFixed(1)}</TableCell>
                       <TableCell className="text-right">{entry.puntos_mental.toFixed(1)}</TableCell>
                       <TableCell className="text-right">{entry.puntos_extras.toFixed(1)}</TableCell>
@@ -204,7 +209,7 @@ export default function LeaderboardPage() {
                     </TableRow>
                     {expandedParticipantId === entry.id && (
                       <TableRow className="bg-muted/10 hover:bg-muted/20 transition-colors">
-                        <TableCell colSpan={9} className="p-0">
+                        <TableCell colSpan={10} className="p-0">
                           <div className="p-4 pl-[70px] border-l-4 border-primary/30 space-y-3"> 
                             <div className="flex justify-between items-start">
                                 <h4 className="text-md font-semibold mb-2">Desglose (Última Puntuación del {new Date(entry.scoreRecordedAt).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })}):</h4>

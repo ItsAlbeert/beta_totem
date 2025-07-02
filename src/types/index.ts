@@ -2,6 +2,7 @@
 export type GameCategory = 'Physical' | 'Mental' | 'Extra';
 export type ExtraGameType = 'opcional' | 'obligatoria';
 export type ExtraGameStatusDetail = 'muy_bien' | 'regular' | 'no_hecho';
+export type Gender = 'Hombre' | 'Mujer';
 
 export interface Game {
   id: string;
@@ -15,6 +16,7 @@ export interface Participant {
   id:string;
   name: string;
   year: 1 | 2 | 3;
+  gender: Gender;
   photoUrl?: string;
 }
 

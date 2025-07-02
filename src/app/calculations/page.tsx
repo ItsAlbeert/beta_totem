@@ -246,6 +246,7 @@ export default function CalculationsPage() {
                     <TableHead className="w-[50px]">Clasif.</TableHead>
                     <TableHead className="w-[60px]">Foto</TableHead>
                     <TableHead>Nombre</TableHead>
+                    <TableHead className="text-center">Género</TableHead>
                     <TableHead className="text-center">T<sub>Físico</sub> (min)</TableHead>
                     <TableHead className="text-center">P<sub>Físico</sub></TableHead>
                     <TableHead className="text-center">T<sub>Mental</sub> (min)</TableHead>
@@ -267,6 +268,7 @@ export default function CalculationsPage() {
                         </Avatar>
                       </TableCell>
                       <TableCell>{entry.name} <span className="text-xs text-muted-foreground">(Año {entry.year})</span></TableCell>
+                      <TableCell className="text-center">{entry.gender}</TableCell>
                       <TableCell className="text-center">{entry.latest_tiempo_fisico.toFixed(2)}</TableCell>
                       <TableCell className="text-center text-lg font-medium">{entry.puntos_fisico.toFixed(1)}</TableCell>
                       <TableCell className="text-center">{entry.latest_tiempo_mental.toFixed(2)}</TableCell>
