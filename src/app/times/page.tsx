@@ -73,7 +73,7 @@ export default function TimesPage() {
     enabled: editMode, 
   });
 
-  const defaultValues = useMemo(() => {
+  const defaultValuesString = useMemo(() => {
     const defaultExtraStatuses: { [key: string]: ExtraGameStatusDetail } = {};
     if (games) {
         games.filter(g => g.category === 'Extra').forEach(g => {
@@ -81,8 +81,9 @@ export default function TimesPage() {
         });
     }
 
+    let values;
     if (editMode && scoreToEdit) {
-        return {
+        values = {
             participantId: scoreToEdit.participantId,
             tiempo_fisico: scoreToEdit.tiempo_fisico,
             tiempo_mental: scoreToEdit.tiempo_mental,
@@ -90,7 +91,7 @@ export default function TimesPage() {
             extraGameDetailedStatuses: { ...defaultExtraStatuses, ...(scoreToEdit.extraGameDetailedStatuses || {}) },
         };
     } else {
-        return {
+        values = {
             participantId: "",
             tiempo_fisico: 0,
             tiempo_mental: 0,
@@ -98,17 +99,17 @@ export default function TimesPage() {
             extraGameDetailedStatuses: defaultExtraStatuses,
         };
     }
+    return JSON.stringify(values);
   }, [editMode, scoreToEdit, games]);
 
 
   const form = useForm<TimeInputFormValues>({
     resolver: zodResolver(timeInputSchema),
-    defaultValues: defaultValues, 
   });
   
   useEffect(() => {
-    form.reset(defaultValues);
-  }, [defaultValues]);
+    form.reset(JSON.parse(defaultValuesString));
+  }, [defaultValuesString, form]);
 
 
   const addScoreMutation = useMutation({
