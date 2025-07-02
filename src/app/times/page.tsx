@@ -53,7 +53,6 @@ export default function TimesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // Derive state from URL params instead of using useState to prevent infinite loops
   const scoreIdFromParams = searchParams.get('edit_score_id');
   const editMode = !!scoreIdFromParams;
   const editingScoreId = scoreIdFromParams;
@@ -86,7 +85,6 @@ export default function TimesPage() {
   });
 
   useEffect(() => {
-    // This effect now only syncs the form state with the URL and fetched data
     const defaultExtraStatuses: { [key: string]: ExtraGameStatusDetail } = {};
     if (games) {
       games.filter(g => g.category === 'Extra').forEach(g => {
@@ -111,7 +109,7 @@ export default function TimesPage() {
         extraGameDetailedStatuses: defaultExtraStatuses,
       });
     }
-  }, [editMode, scoreToEdit, games]);
+  }, [editMode, scoreToEdit, games, form]);
 
 
   const addScoreMutation = useMutation({
