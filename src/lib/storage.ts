@@ -7,7 +7,7 @@
 'use client';
 
 // Example: Storing a user preference (not main app data)
-export const THEME_PREFERENCE_KEY = "chronoScoreThemePreference";
+export const THEME_PREFERENCE_KEY = "totem2025ThemePreference";
 
 export const getClientSidePreference = (key: string, defaultValue: string | null = null): string | null => {
   if (typeof window === 'undefined') {

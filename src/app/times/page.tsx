@@ -205,7 +205,7 @@ export default function TimesPage() {
     return (
         <>
         <PageHeader
-            title={editMode ? "Editar Puntuación" : "Registrar Tiempos y Estados"}
+            title={editMode ? "Editar Puntuación" : "Registrar Tiempos"}
             description={editMode ? "Modifica los detalles de la puntuación." : "Introduce tiempos totales físicos, mentales y estados para los desafíos extra."}
         />
         <Card className="max-w-2xl mx-auto shadow-lg">
@@ -315,7 +315,7 @@ export default function TimesPage() {
   return (
     <>
       <PageHeader
-        title={editMode ? "Editar Puntuación" : "Registrar Tiempos y Estados"}
+        title={editMode ? "Editar Puntuación" : "Registrar Tiempos"}
         description={editMode ? "Modifica los detalles de la puntuación existente." : "Introduce tiempos totales físicos, mentales y estados para los desafíos extra."}
       />
       <Card className="max-w-2xl mx-auto shadow-lg hover:shadow-xl transition-shadow duration-300">

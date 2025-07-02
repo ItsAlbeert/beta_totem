@@ -18,7 +18,7 @@ const DashboardPage = () => {
   return (
     <>
       <PageHeader
-        title="Panel de Control"
+        title="General"
         description="Visualiza el rendimiento y la puntuación total de cada participante de un vistazo."
       />
 

@@ -20,13 +20,13 @@ export const primaryNav: NavItemGroup[] = [
   {
     items: [
       {
-        title: "Panel de Control",
+        title: "General",
         href: "/dashboard",
         icon: Icons.LayoutDashboard,
         description: "Resumen general de la competición.",
       },
       {
-        title: "Registrar Tiempos y Estados",
+        title: "Registrar Tiempos",
         href: "/times",
         icon: Icons.Clock,
         description: "Introduce tiempos físicos, mentales y estados para los desafíos extra.",
