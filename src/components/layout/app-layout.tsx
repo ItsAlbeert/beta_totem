@@ -4,7 +4,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import React from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { Icons } from "@/components/icons";
 import {
@@ -22,16 +21,24 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { siteConfig } from "@/config/site";
-import { primaryNav, type NavItemGroup, type NavItem } from "@/config/nav";
+import { primaryNav as primaryNavItems, type NavItemGroup, type NavItem, type UserRole } from "@/config/nav";
 import { cn } from "@/lib/utils";
-import { Toaster } from "@/components/ui/toaster";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/context/auth-context";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Toaster } from "../ui/toaster";
 
 interface AppLayoutProps {
   children: React.ReactNode;
 }
-
-const queryClient = new QueryClient();
 
 function SidebarBrand() {
   const { open } = useSidebar();
@@ -50,11 +57,31 @@ function SidebarBrand() {
   );
 }
 
+// Recursive function to filter nav items based on user role
+function filterNavItemsByRole(items: (NavItem | NavItemGroup)[], userRole: UserRole): (NavItem | NavItemGroup)[] {
+    return items.map(itemOrGroup => {
+        // If it's a group, filter its inner items
+        if ("items" in itemOrGroup) {
+            const filteredGroupItems = filterNavItemsByRole(itemOrGroup.items, userRole);
+            // If the group has a role requirement and user doesn't meet it, or if it becomes empty after filtering, don't render it
+            if ((itemOrGroup.roles && !itemOrGroup.roles.includes(userRole)) || filteredGroupItems.length === 0) {
+                return null;
+            }
+            return { ...itemOrGroup, items: filteredGroupItems };
+        }
+        // If it's a single item, check its roles
+        if (itemOrGroup.roles && !itemOrGroup.roles.includes(userRole)) {
+            return null;
+        }
+        return itemOrGroup;
+    }).filter((item): item is NavItem | NavItemGroup => item !== null);
+}
+
 function NavMenu({ items, currentPath }: { items: (NavItem | NavItemGroup)[]; currentPath: string }) {
   return (
     <SidebarMenu>
       {items.map((itemOrGroup, index) =>
-        "items" in itemOrGroup ? ( 
+        "items" in itemOrGroup ? (
           <React.Fragment key={`group-${index}`}>
             {itemOrGroup.title && (
               <SidebarGroupLabel className="mt-2">{itemOrGroup.title}</SidebarGroupLabel>
@@ -75,7 +102,7 @@ function NavMenu({ items, currentPath }: { items: (NavItem | NavItemGroup)[]; cu
               </SidebarMenuItem>
             ))}
           </React.Fragment>
-        ) : ( 
+        ) : (
           <SidebarMenuItem key={`${itemOrGroup.title}-${index}`}>
             <SidebarMenuButton
               asChild
@@ -95,18 +122,48 @@ function NavMenu({ items, currentPath }: { items: (NavItem | NavItemGroup)[]; cu
   );
 }
 
+function UserProfile() {
+    const { user, logout } = useAuth();
+    if (!user) return null;
+
+    const roleText = user.role.charAt(0).toUpperCase() + user.role.slice(1);
+    const fallback = user.role.substring(0, 2).toUpperCase();
+
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="flex items-center gap-2">
+                     <Avatar className="h-6 w-6">
+                        <AvatarFallback>{fallback}</AvatarFallback>
+                    </Avatar>
+                    <span>{roleText}</span>
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Mi Cuenta</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={logout} className="cursor-pointer">
+                    Cerrar sesión
+                </DropdownMenuItem>
+            </DropdownMenuContent>
+        </DropdownMenu>
+    );
+}
+
 export function AppLayout({ children }: AppLayoutProps) {
   const pathname = usePathname();
+  const { user } = useAuth();
+
+  const accessibleNavItems = user ? filterNavItemsByRole(primaryNavItems, user.role) : [];
 
   return (
-    <QueryClientProvider client={queryClient}>
       <SidebarProvider defaultOpen>
         <Sidebar>
           <SidebarHeader>
             <SidebarBrand />
           </SidebarHeader>
           <SidebarContent>
-            <NavMenu items={primaryNav} currentPath={pathname} />
+            <NavMenu items={accessibleNavItems} currentPath={pathname} />
           </SidebarContent>
           <SidebarFooter className="group-data-[collapsible=icon]:hidden">
           </SidebarFooter>
@@ -116,7 +173,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             <div className="flex items-center">
               <SidebarTrigger className="md:hidden" />
             </div>
-            <Button variant="outline" size="sm">Perfil de Usuario</Button>
+            <UserProfile />
           </header>
           <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
             {children}
@@ -124,6 +181,5 @@ export function AppLayout({ children }: AppLayoutProps) {
           <Toaster />
         </SidebarInset>
       </SidebarProvider>
-    </QueryClientProvider>
   );
 }
