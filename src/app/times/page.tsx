@@ -33,6 +33,12 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getParticipants, getGames, addScore, getScoreById, updateScore } from "@/lib/firestore-services";
 import { Skeleton } from "@/components/ui/skeleton";
 
+// Pre-processing logic for optional number fields to handle empty strings.
+const optionalNumberSchema = z.preprocess(
+  (val) => (val === "" || val === null ? undefined : val),
+  z.coerce.number({ invalid_type_error: "Debe ser un número." }).min(0, "No puede ser negativo.").optional()
+);
+
 const timeInputSchema = z.object({
   participantId: z.string().min(1, "La selección de participante es obligatoria."),
   tiempo_fisico: z.coerce
@@ -41,7 +47,7 @@ const timeInputSchema = z.object({
   tiempo_mental: z.coerce
     .number({ invalid_type_error: "El tiempo mental debe ser un número.", required_error: "El tiempo mental es obligatorio." })
     .min(0, "El tiempo mental no puede ser negativo."),
-  gameTimes: z.record(z.string(), z.coerce.number().min(0, "El tiempo de juego no puede ser negativo.").optional()).optional(),
+  gameTimes: z.record(z.string(), optionalNumberSchema).optional(),
   extraGameDetailedStatuses: z.record(z.string(), z.enum(['muy_bien', 'regular', 'no_hecho'])).optional(),
 });
 
@@ -184,6 +190,15 @@ export default function TimesPage() {
 
 
   async function onSubmit(values: TimeInputFormValues) {
+    // Clean up gameTimes: remove properties that are undefined
+    if (values.gameTimes) {
+        Object.keys(values.gameTimes).forEach(key => {
+            if (values.gameTimes![key] === undefined) {
+                delete values.gameTimes![key];
+            }
+        });
+    }
+
     if (editMode && editingScoreId) {
         updateScoreMutation.mutate({ scoreId: editingScoreId, values });
     } else {
@@ -244,9 +259,9 @@ export default function TimesPage() {
                   <Input 
                     type="number" 
                     placeholder="ej., 10" 
-                    {...field} 
-                    value={field.value ?? ''} 
-                    onChange={e => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))} 
+                    {...field}
+                    value={field.value ?? ''} // Ensure the input is always controlled
+                    onChange={e => field.onChange(e.target.value)} // Pass the raw string value
                     step="any"
                     disabled={addScoreMutation.isPending || updateScoreMutation.isPending || isLoadingGames}
                   />
