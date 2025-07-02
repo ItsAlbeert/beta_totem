@@ -260,8 +260,8 @@ export default function TimesPage() {
                     type="number" 
                     placeholder="ej., 10" 
                     {...field}
-                    value={field.value ?? ''} // Ensure the input is always controlled
-                    onChange={e => field.onChange(e.target.value)} // Pass the raw string value
+                    value={field.value ?? ''}
+                    onChange={e => field.onChange(e.target.value)}
                     step="any"
                     disabled={addScoreMutation.isPending || updateScoreMutation.isPending || isLoadingGames}
                   />
@@ -352,7 +352,7 @@ export default function TimesPage() {
                     <Select 
                       onValueChange={field.onChange} 
                       value={field.value}
-                      disabled={isLoadingParticipants || addScoreMutation.isPending || updateScoreMutation.isPending || editMode} // Disable if editing
+                      disabled={isLoadingParticipants || addScoreMutation.isPending || updateScoreMutation.isPending || editMode}
                     >
                       <FormControl>
                         <SelectTrigger>
@@ -387,7 +387,14 @@ export default function TimesPage() {
                   <FormItem>
                     <FormLabel>Tiempo Total Desafío Físico (minutos)</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="ej., 240.5" {...field} step="any" disabled={addScoreMutation.isPending || updateScoreMutation.isPending} />
+                      <Input
+                        type="number"
+                        placeholder="ej., 240.5"
+                        {...field}
+                        value={field.value ?? ''}
+                        step="any"
+                        disabled={addScoreMutation.isPending || updateScoreMutation.isPending}
+                      />
                     </FormControl>
                     <FormDescription>
                       Tiempo total para todos los desafíos físicos. (ej. ≤220 para 100pts, ≥360 para 30pts)
@@ -407,7 +414,14 @@ export default function TimesPage() {
                   <FormItem>
                     <FormLabel>Tiempo Total Desafío Mental (minutos)</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="ej., 60" {...field} step="any" disabled={addScoreMutation.isPending || updateScoreMutation.isPending}/>
+                      <Input
+                        type="number"
+                        placeholder="ej., 60"
+                        {...field}
+                        value={field.value ?? ''}
+                        step="any"
+                        disabled={addScoreMutation.isPending || updateScoreMutation.isPending}
+                      />
                     </FormControl>
                     <FormDescription>
                       Tiempo total para todos los desafíos mentales. (ej. ≤50 para 100pts, ≥120 para 30pts)
