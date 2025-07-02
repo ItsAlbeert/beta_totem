@@ -83,6 +83,13 @@ export const primaryNav: NavItemGroup[] = [
         description: "Comparar el rendimiento de participantes y juegos.",
         roles: ['admin', 'participant'],
       },
+      {
+        title: "MVP",
+        href: "/statistics/mvp",
+        icon: Icons.Award,
+        description: "Destacados por juego y categoría.",
+        roles: ['admin', 'participant'],
+      },
     ],
     roles: ['admin', 'participant'],
   },
