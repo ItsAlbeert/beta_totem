@@ -1,3 +1,4 @@
+
 import { Icons, type Icon } from "@/components/icons";
 import type { UserRole } from "@/context/auth-context";
 
@@ -89,7 +90,16 @@ export const primaryNav: NavItemGroup[] = [
         description: "Destacados por juego y categoría.",
         roles: ['admin', 'participant'],
       },
+      {
+        title: "Hall of Fame",
+        href: "/statistics/hall-of-fame",
+        icon: Icons.Trophy,
+        description: "El muro de los inmortales.",
+        roles: ['admin', 'participant'],
+      },
     ],
     roles: ['admin', 'participant'],
   },
 ];
+
+    
