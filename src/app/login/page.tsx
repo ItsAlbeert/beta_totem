@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState } from 'react';
@@ -25,7 +24,7 @@ export default function LoginPage() {
     setTimeout(() => {
       if (username === 'admin' && password === 'admin') {
         login('admin');
-      } else if (username === 'participant' && password === 'participant') {
+      } else if (username === 'participante' && password === 'participante') {
         login('participant');
       } else {
         toast({
@@ -57,7 +56,7 @@ export default function LoginPage() {
               <Input
                 id="username"
                 type="text"
-                placeholder="admin"
+                placeholder=""
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
@@ -69,7 +68,7 @@ export default function LoginPage() {
               <Input
                 id="password"
                 type="password"
-                placeholder="admin"
+                placeholder=""
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -79,10 +78,6 @@ export default function LoginPage() {
             <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading ? 'Accediendo...' : 'Acceder'}
             </Button>
-            <div className="text-xs text-muted-foreground text-center pt-2">
-                <p>Admin: admin / admin</p>
-                <p>Participante: participant / participant</p>
-            </div>
           </form>
         </CardContent>
       </Card>
