@@ -91,7 +91,7 @@ export const primaryNav: NavItemGroup[] = [
         roles: ['admin', 'participant'],
       },
        {
-        title: "Ganadores Totem",
+        title: "Ganador",
         href: "/statistics/winners",
         icon: Icons.Trophy,
         description: "El campeón de la competición.",

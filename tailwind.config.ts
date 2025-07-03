@@ -27,6 +27,7 @@ export default {
         sans: ["var(--font-geist-sans)", "Inter", "system-ui", "sans-serif"],
         mono: ["var(--font-geist-mono)", "Fira Code", "monospace"],
         heading: ["var(--font-geist-sans)", "Inter", "system-ui", "sans-serif"],
+        serif: ["Georgia", "ui-serif", "serif"],
       },
       fontSize: {
         "2xs": ["0.625rem", { lineHeight: "0.75rem" }],
